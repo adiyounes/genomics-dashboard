@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env
+
+# Data files (too large for git)
+data/raw/*.vcf
+data/raw/*.vcf.gz
+data/raw/*.gz
+data/processed/*
+
+# Database credentials
+database/credentials.py
+*.sql.bak
+
+# VS Code
+.vscode/settings.json
+
+# OS
+.DS_Store

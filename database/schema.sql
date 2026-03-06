@@ -82,13 +82,13 @@ CREATE TABLE IF NOT EXISTS clinvar_annotations (
     clinvar_id            SERIAL PRIMARY KEY,
     chromosome            VARCHAR(10),
     position              BIGINT,
-    ref_allele            VARCHAR(500),
-    alt_allele            VARCHAR(500),
-    gene_name             VARCHAR(100),
-    clinical_significance VARCHAR(100),  -- 'Pathogenic' | 'Likely pathogenic' | 'VUS' | 'Benign'
+    ref_allele            TEXT,
+    alt_allele            TEXT,
+    gene_name             TEXT,
+    clinical_significance TEXT,  -- 'Pathogenic' | 'Likely pathogenic' | 'VUS' | 'Benign'
     condition_name        TEXT,          -- disease name e.g. 'Hereditary breast cancer'
-    review_status         VARCHAR(100),  -- how well-evidenced: 'practice guideline' > 'reviewed by expert panel' etc.
-    clinvar_accession     VARCHAR(50)    -- ClinVar's own ID e.g. 'RCV000012345'
+    review_status         TEXT,  -- how well-evidenced: 'practice guideline' > 'reviewed by expert panel' etc.
+    clinvar_accession     TEXT    -- ClinVar's own ID e.g. 'RCV000012345'
 );
 
 -- Index for fast annotation matching

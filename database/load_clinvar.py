@@ -128,10 +128,17 @@ def load_clinvar(limit=None):
                 except ValueError:
                     skipped += 1
                     continue
+                if position < 1:
+                    skipped +=1
+                    continue
 
             ref_allele = clean_value(row.get("ReferenceAlleleVCF"))
             alt_allele = clean_value(row.get("AlternateAlleleVCF"))
             condition  = clean_value(row.get("PhenotypeList"))
+            if condition:
+                condition = condition.split("|")[0].strip()
+                if not condition:
+                    condition = None
             review     = clean_value(row.get("ReviewStatus"))
             accession  = clean_value(row.get("RCVaccession"))
 

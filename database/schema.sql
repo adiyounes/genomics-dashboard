@@ -110,12 +110,12 @@ CREATE INDEX IF NOT EXISTS idx_clinvar_significance
 
 CREATE TABLE IF NOT EXISTS pharmgkb_annotations (
     pharmgkb_id      SERIAL PRIMARY KEY,
-    gene_name        VARCHAR(100),   -- e.g. 'CYP2D6'
-    drug_name        VARCHAR(255),   -- e.g. 'Codeine'
+    gene_name        TEXT,   -- e.g. 'CYP2D6'
+    drug_name        TEXT,   -- e.g. 'Codeine'
     effect_summary   TEXT,           -- e.g. 'Poor metabolizer — increased toxicity risk'
-    evidence_level   VARCHAR(10),    -- PharmGKB scale: '1A' | '1B' | '2A' | '2B' | '3' | '4'
-    phenotype_category VARCHAR(100), -- 'Metabolism/PK' | 'Efficacy' | 'Toxicity' | 'Dosage'
-    pmid             VARCHAR(50)     -- PubMed ID of supporting study
+    evidence_level   TEXT,    -- PharmGKB scale: '1A' | '1B' | '2A' | '2B' | '3' | '4'
+    phenotype_category TEXT, -- 'Metabolism/PK' | 'Efficacy' | 'Toxicity' | 'Dosage'
+    pmid             TEXT     -- PubMed ID of supporting study
 );
 
 CREATE INDEX IF NOT EXISTS idx_pharmgkb_gene

@@ -20,3 +20,4 @@ database/credentials.py
 
 # OS
 .DS_Store
+database/backups/*.sql

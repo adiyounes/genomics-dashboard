@@ -588,27 +588,27 @@ def ingest_vcf(filepath, username=None, email=None):
 
 if __name__ == "__main__":
 
-    sample_vcf = Path("data/raw/multi_sample_test.vcf")
+    sample_vcf = Path("data/raw/sample.vcf")
 
     if not sample_vcf.exists():
         print("Creating sample VCF for testing...")
         sample_content = """##fileformat=VCFv4.2
-##reference=GRCh38
-##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
-##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
-##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
-#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPATIENT_001
-chr1\t925952\trs1234567\tG\tA\t50\tPASS\tDP=30;AF=0.5;Gene=CFTR\tGT:DP\t0/1:30
-chr2\t179415139\trs3456789\tA\tG\t75\tPASS\tDP=60;AF=0.75;Gene=CYP2D6\tGT:DP\t1/1:60
-chr7\t117548628\trs4567890\tT\tC\t88\tPASS\tDP=22;AF=0.5;Gene=CYP2C19\tGT:DP\t0/1:22
-chr13\t32339916\trs5678901\tG\tT\t92\tPASS\tDP=55;AF=0.5;Gene=BRCA2\tGT:DP\t0/1:55
-chr17\t41244429\trs6789012\tA\tC\t95\tPASS\tDP=70;AF=1.0;Gene=BRCA1\tGT:DP\t1/1:70
-chr17\t41246709\trs7890123\tC\tG\t61\tPASS\tDP=33;AF=0.5;Gene=BRCA1\tGT:DP\t0/1:33
-chr19\t15879621\trs8901234\tT\tA\t44\tPASS\tDP=18;AF=0.5;Gene=CYP3A4\tGT:DP\t0/1:18
-chr22\t19724571\trs9012345\tG\tC\t83\tPASS\tDP=40;AF=0.25;Gene=NF2\tGT:DP\t0/0:40
-chr22\t19724772\trs1902345\tT\tG\t77\tPASS\tDP=28;AF=0.5;Gene=TP53\tGT:DP\t0/1:28
-"""
+                            ##reference=GRCh38
+                            ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+                            ##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+                            ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+                            ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
+                            #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPATIENT_001
+                            chr1\t925952\trs1234567\tG\tA\t50\tPASS\tDP=30;AF=0.5;Gene=CFTR\tGT:DP\t0/1:30
+                            chr2\t179415139\trs3456789\tA\tG\t75\tPASS\tDP=60;AF=0.75;Gene=CYP2D6\tGT:DP\t1/1:60
+                            chr7\t117548628\trs4567890\tT\tC\t88\tPASS\tDP=22;AF=0.5;Gene=CYP2C19\tGT:DP\t0/1:22
+                            chr13\t32339916\trs5678901\tG\tT\t92\tPASS\tDP=55;AF=0.5;Gene=BRCA2\tGT:DP\t0/1:55
+                            chr17\t41244429\trs6789012\tA\tC\t95\tPASS\tDP=70;AF=1.0;Gene=BRCA1\tGT:DP\t1/1:70
+                            chr17\t41246709\trs7890123\tC\tG\t61\tPASS\tDP=33;AF=0.5;Gene=BRCA1\tGT:DP\t0/1:33
+                            chr19\t15879621\trs8901234\tT\tA\t44\tPASS\tDP=18;AF=0.5;Gene=CYP3A4\tGT:DP\t0/1:18
+                            chr22\t19724571\trs9012345\tG\tC\t83\tPASS\tDP=40;AF=0.25;Gene=NF2\tGT:DP\t0/0:40
+                            chr22\t19724772\trs1902345\tT\tG\t77\tPASS\tDP=28;AF=0.5;Gene=TP53\tGT:DP\t0/1:28
+                            """
         sample_vcf.write_text(sample_content)
         print(f"  Created {sample_vcf}\n")
 
@@ -618,25 +618,25 @@ chr22\t19724772\trs1902345\tT\tG\t77\tPASS\tDP=28;AF=0.5;Gene=TP53\tGT:DP\t0/1:2
         email    = "younesadi18@gmail.com"
     )
 
-if results:
-    print("\n── Verifying inserted variants ──")
-    for result in results:
-        print(f"\n  Sample: {result['sample']} (upload_id={result['upload_id']})")
-        variants = execute_query("""
-            SELECT chromosome, position, gene_name, zygosity, flag
-            FROM variants
-            WHERE upload_id = %s
-            ORDER BY chromosome, position
-        """, params=(result['upload_id'],))
+    if results:
+        print("\n── Verifying inserted variants ──")
+        for result in results:
+            print(f"\n  Sample: {result['sample']} (upload_id={result['upload_id']})")
+            variants = execute_query("""
+                SELECT chromosome, position, gene_name, zygosity, flag
+                FROM variants
+                WHERE upload_id = %s
+                ORDER BY chromosome, position
+            """, params=(result['upload_id'],))
 
-        print(f"  {'CHROM':<8} {'POS':<12} {'GENE':<10} {'ZYGOSITY':<20} {'FLAG'}")
-        print(f"  {'-'*65}")
-        for v in variants:
-            print(
-                f"  {v['chromosome']:<8} "
-                f"{v['position']:<12} "
-                f"{str(v['gene_name']):<10} "
-                f"{str(v['zygosity']):<20} "
-                f"{str(v['flag'])}"
-            )
-        print(f"  Total: {len(variants)} variants")
+            print(f"  {'CHROM':<8} {'POS':<12} {'GENE':<10} {'ZYGOSITY':<20} {'FLAG'}")
+            print(f"  {'-'*65}")
+            for v in variants:
+                print(
+                    f"  {v['chromosome']:<8} "
+                    f"{v['position']:<12} "
+                    f"{str(v['gene_name']):<10} "
+                    f"{str(v['zygosity']):<20} "
+                    f"{str(v['flag'])}"
+                )
+            print(f"  Total: {len(variants)} variants")

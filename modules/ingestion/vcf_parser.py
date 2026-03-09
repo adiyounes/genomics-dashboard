@@ -44,7 +44,7 @@ GRCH38_IDENTIFIERS = {
     "genome reference consortium human build 38"
 }
 
-BATCH_SIZE     = 500
+BATCH_SIZE     = 50000
 PROGRESS_EVERY = 50000
 
 
@@ -103,6 +103,48 @@ def open_vcf(filepath):
         return gzip.open(filepath, "rt", encoding="utf-8")
     return open(filepath, "r", encoding="utf-8")
 
+def load_gene_index():
+    """Load all gene + exon coordinates into memory for fast lookup."""
+    from database.connect import execute_query
+
+    print("  Loading gene index into memory...")
+    index = {}
+
+    # Load exons first — exonic hits have priority
+    exons = execute_query("""
+        SELECT chromosome, start_pos, end_pos, gene_name
+        FROM exon_coordinates
+        ORDER BY chromosome, start_pos
+    """)
+    for row in exons:
+        chrom = row['chromosome']
+        if chrom not in index:
+            index[chrom] = []
+        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name']))
+
+    # Load genes as fallback
+    genes = execute_query("""
+        SELECT chromosome, start_pos, end_pos, gene_name
+        FROM gene_coordinates
+        ORDER BY chromosome, start_pos
+    """)
+    for row in genes:
+        chrom = row['chromosome']
+        if chrom not in index:
+            index[chrom] = []
+        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name']))
+
+    total = sum(len(v) for v in index.values())
+    print(f"  Gene index ready — {total:,} entries across {len(index)} chromosomes")
+    return index
+
+
+def lookup_gene_memory(index, chromosome, position):
+    """Instant gene lookup from in-memory index."""
+    for start, end, gene_name in index.get(chromosome, []):
+        if start <= position <= end:
+            return gene_name
+    return None
 
 def parse_vcf_header(filepath):
     """
@@ -287,8 +329,30 @@ def parse_info_field(info_str):
             info[item.strip()] = True
     return info
 
+def extract_gene_from_csq(csq_value):
+    """Extract gene name from VEP CSQ field. Gene is at index 1."""
+    if not csq_value:
+        return None
+    first_entry = csq_value.split(",")[0]
+    parts = first_entry.split("|")
+    if len(parts) > 1:
+        gene = parts[1].strip()
+        return gene if gene else None
+    return None
 
-def parse_variant_line(line, sample_index=0):
+
+def extract_gene_from_ann(ann_value):
+    """Extract gene name from SnpEff ANN field. Gene is at index 3."""
+    if not ann_value:
+        return None
+    first_entry = ann_value.split(",")[0]
+    parts = first_entry.split("|")
+    if len(parts) > 3:
+        gene = parts[3].strip()
+        return gene if gene else None
+    return None
+
+def parse_variant_line(line, sample_index=0,gene_index=None):
     """
     Parse one VCF data line for a specific sample.
 
@@ -362,9 +426,20 @@ def parse_variant_line(line, sample_index=0):
                     pass
 
         # Gene name from INFO
-        gene_name = info.get("Gene") or info.get("GENE") or info.get("ANN")
-        if gene_name and "," in str(gene_name):
-            gene_name = str(gene_name).split(",")[0]
+        # Gene name from INFO — try multiple sources in order
+        gene_name = info.get("Gene") or info.get("GENE")
+
+        # Try VEP CSQ format
+        if not gene_name and "CSQ" in info:
+            gene_name = extract_gene_from_csq(str(info["CSQ"]))
+
+        # Try SnpEff ANN format
+        if not gene_name and "ANN" in info:
+            gene_name = extract_gene_from_ann(str(info["ANN"]))
+
+        # Final fallback — in-memory coordinate lookup
+        if not gene_name and gene_index:
+            gene_name = lookup_gene_memory(gene_index, chrom, pos)
 
         return {
             "chrom"    : chrom,
@@ -426,13 +501,15 @@ def ingest_single_sample(filepath, username, email,
     flagged  = {"pharmacogenomics": 0, "clinical": 0, "both": 0}
     batch    = []
 
+    gene_index = load_gene_index()
+
     try:
         with open_vcf(filepath) as f:
             for line in f:
                 if line.startswith("#"):
                     continue
 
-                variant = parse_variant_line(line, sample_index=sample_index)
+                variant = parse_variant_line(line, sample_index=sample_index,gene_index=gene_index)
                 if variant is None:
                     skipped += 1
                     continue
@@ -477,6 +554,7 @@ def ingest_single_sample(filepath, username, email,
                     inserted += len(batch)
                     batch = []
                     if inserted % PROGRESS_EVERY == 0:
+                        conn.commit()
                         print(f"    ↳ {inserted:,} variants inserted...")
 
         if batch:
@@ -588,7 +666,7 @@ def ingest_vcf(filepath, username=None, email=None):
 
 if __name__ == "__main__":
 
-    sample_vcf = Path("data/raw/sample.vcf")
+    sample_vcf = Path("data/raw/HG001_test.vcf")
 
     if not sample_vcf.exists():
         print("Creating sample VCF for testing...")
@@ -614,8 +692,8 @@ if __name__ == "__main__":
 
     results = ingest_vcf(
         filepath = sample_vcf,
-        username = "younes",
-        email    = "younesadi18@gmail.com"
+        username = "NA12878_test",
+        email    = "na12878_test@giab.org"
     )
 
     if results:

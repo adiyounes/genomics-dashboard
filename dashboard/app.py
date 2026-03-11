@@ -374,6 +374,13 @@ if page == "Upload & Analyse":
                     f"{total_inserted:,} variants ingested across "
                     f"{len(results)} sample(s)"
                 )
+                for result in results:
+                    if result.get('assembly') and result['assembly'] != 'GRCh38':
+                        st.warning(
+                                    f"⚠️ Assembly detected: {result['assembly']} — "
+                                    f"this pipeline is optimised for GRCh38. "
+                                    f"Annotation accuracy may be reduced."
+                        )
                 time.sleep(1)
                 st.rerun()
 
@@ -423,11 +430,20 @@ elif page == "Browse Results":
             if "assembly=" in part:
                 assembly = part.split("=")[1].strip()
 
-    color = "#4ade80" if assembly == "GRCh38" else "#fbbf24" if assembly == "GRCh37" else "#f87171"
-    st.markdown(
-        f'<span style="font-family:IBM Plex Mono,monospace;font-size:0.8rem;'
-        f'color:{color};">⬡ Assembly: {assembly}</span>',
-        unsafe_allow_html=True
+    if assembly == "GRCh38":
+        st.success(
+        f"✅ Assembly: GRCh38 — fully compatible with ClinVar annotation database"
+        )
+    elif assembly == "GRCh37":
+        st.warning(
+        f"⚠️ Assembly: GRCh37 — coordinates differ from GRCh38. "
+        f"ClinVar matching may be inaccurate. Consider lifting over to GRCh38 "
+        f"using UCSC LiftOver before re-uploading."
+        )
+    else:
+        st.error(
+        f"❌ Assembly: {assembly} — unrecognised build. "
+        f"Annotations cannot be trusted. This pipeline is designed for GRCh38 only."
     )
 
     st.markdown("<br>", unsafe_allow_html=True)

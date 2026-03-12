@@ -546,6 +546,13 @@ elif page == "Browse Results":
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.caption(f"{len(rows)} of {len(variants)} variants shown")
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="⬇ Download as CSV",
+                data=csv,
+                file_name=f"variants_upload_{upload_id}.csv",
+                mime="text/csv"
+            )
 
     else:
         st.info("No variants found for this upload.")

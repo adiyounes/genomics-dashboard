@@ -411,10 +411,18 @@ elif page == "Browse Results":
         st.stop()
 
     # Upload selector
-    upload_labels = {
-        f"{u['username']} — {u['filename']} ({u['total_variants']} variants)": u['upload_id']
-        for u in uploads
-    }
+    upload_labels = {}
+    for u in uploads:
+        flagged = execute_query("""
+            SELECT COUNT(*) as count FROM variants
+            WHERE upload_id = %s AND flag IS NOT NULL
+        """, params=(u['upload_id'],))
+        flagged_count = flagged[0]['count'] if flagged else 0
+        label = (
+            f"{u['username']} — {u['filename']} "
+            f"({u['total_variants']} variants, {flagged_count} flagged)"
+        )
+        upload_labels[label] = u['upload_id']
     selected_label = st.selectbox(
         "Select upload",
         list(upload_labels.keys()),

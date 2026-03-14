@@ -545,6 +545,7 @@ elif page == "Browse Results":
                 "Zygosity"       : v['zygosity']  or "—",
                 "Classification" : ann_type,
                 "Risk Score"     : round(score, 3) if score is not None else None,
+                "Risk Level" : score_to_label(score),
                 "Annotations"    : ann_count,
             })
 

@@ -70,7 +70,7 @@ def load_gene_index() -> dict:
         """
             SELECT chromosome, start_pos, end_pos, gene_name 
             FROM exon_coordinates
-            ORDER BY chromosome, start_pos
+            ORDER BY chromosome, start_pos;
         """
     )
 
@@ -85,7 +85,7 @@ def load_gene_index() -> dict:
         """
             SELECT chromosome, start_pos, end_pos, gene_name
             from gene_coordinates
-            ORDER BY chromosome, start_pos
+            ORDER BY chromosome, start_pos;
         """
     )
 
@@ -101,135 +101,96 @@ def load_gene_index() -> dict:
 
     # Load genes as fallback
 
-def look_up_memory(index: dict, chrom: str, pos: int):
+def look_gene_memory(index: dict, chrom: str, pos: int):
     for start, end, gene_name, region in index.get(chrom, []):
         if start <= pos <= end:
             return gene_name, region
     return None, None
 
-
-
 def parse_vcf_header(filepath):
-    """
-    Read the VCF header and extract:
-      - All metadata lines (##)
-      - Sample names from the #CHROM line
-      - Detected assembly version
-
-    Returns:
-        header_lines  : list of ## metadata lines
-        sample_names  : list of sample column names
-        assembly      : detected assembly string
-    """
     header_lines = []
-    sample_names = []
-
+    columns = []
+    samples = []
     with open_vcf(filepath) as f:
         for line in f:
-            line = line.strip()
-            if not line:
-                continue
             if line.startswith("##"):
                 header_lines.append(line)
-            elif line.startswith("#CHROM"):
-                fields = line.split("\t")
-                sample_names = fields[9:] if len(fields) > 9 else ["SAMPLE"]
-                break
+    
+            elif line.startswith("#C"):
+                cols = line.strip().split("\t")
+                cols[0] = cols[0].lstrip('#')
+                columns = cols[:9]
+                samples = cols[9:]
 
-    assembly = detect_assembly(header_lines)
-    return header_lines, sample_names, assembly
+    return header_lines, columns, samples
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 3: USER AND UPLOAD MANAGEMENT
-# ─────────────────────────────────────────────────────────────
+#user management
 
-def get_or_create_user(username, email):
-    """Get existing user by email or create a new one."""
+def get_or_create_user(username, email) -> int:
     existing = execute_query(
-        "SELECT user_id FROM users WHERE email = %s",
-        params=(email,)
+        """
+            SELECT user_id from users
+                WHERE email = %s;
+        """, (email)
     )
+
     if existing:
         return existing[0]['user_id']
+    else:
+        user_id = execute_insert(
+                """
+                    INSERT INTO users (username, email)
+                    VALUES (%s, %s)
+                    RETURNING user_id; 
+                """, (username, email)
+
+        )
+        return user_id
+
+
+def create_upload_record(user_id, filename):
     return execute_insert(
-        "INSERT INTO users (username, email) VALUES (%s, %s) RETURNING user_id",
-        params=(username, email)
+        """
+            INSERT INTO vcf_uploads (user_id, filename)
+            VALUES (%s, %s)
+            RETURNING upload_id;
+        """, (user_id, filename)
     )
-
-
-def create_upload_record(user_id, filename, assembly):
-    """Create a vcf_uploads record with assembly info in notes."""
-    return execute_insert("""
-        INSERT INTO vcf_uploads (user_id, filename, status, notes)
-        VALUES (%s, %s, 'processing', %s)
-        RETURNING upload_id
-    """, params=(user_id, filename, f"assembly={assembly}"))
 
 
 def update_upload_status(upload_id, status, total_variants=0):
-    """Update the upload record when processing is done."""
-    execute_query("""
-        UPDATE vcf_uploads
-        SET status = %s, total_variants = %s
-        WHERE upload_id = %s
-    """, params=(status, total_variants, upload_id), fetch=False)
+    execute_insert(
+        """
+            UPDATE vcf_uploads
+            SET status = %s, total_variants = %s
+            WHERE upload_id = %s;
+        """,(status,total_variants,upload_id)
+    )
 
 
 def delete_existing_upload(user_id, filename):
-    """
-    If this user already has an upload with this filename,
-    delete it and all its variants before re-ingesting.
-    Implements the 'replace' duplicate strategy.
-    """
-    existing = execute_query("""
-        SELECT upload_id FROM vcf_uploads
-        WHERE user_id = %s AND filename = %s
-    """, params=(user_id, filename))
+    existing = execute_query(
+        """
+            SELECT user_id, filename
+            FROM vcf_uploads
+            WHERE user_id = %s
+            AND filename = %s;
+        """,(user_id, filename)
+    )
 
     if not existing:
         return 0
-
-    deleted = 0
-    for row in existing:
-        old_id = row['upload_id']
-
-        # Delete variant_annotations first (foreign key)
-        execute_query("""
-            DELETE FROM variant_annotations
-            WHERE variant_id IN (
-                SELECT variant_id FROM variants WHERE upload_id = %s
-            )
-        """, params=(old_id,), fetch=False)
-
-        # Delete variants
-        execute_query(
-            "DELETE FROM variants WHERE upload_id = %s",
-            params=(old_id,), fetch=False
+    else:
+        deleted = execute_query(
+            """
+                DELETE FROM vcf_uploads
+                WHERE user_id = %s
+                AND filename = %s
+                RETURNING 0;
+            """,(user_id,filename)
         )
-
-        # Delete upload record
-        execute_query(
-            "DELETE FROM vcf_uploads WHERE upload_id = %s",
-            params=(old_id,), fetch=False
-        )
-
-        print(f"  🗑️  Replaced previous upload (id={old_id})")
-        deleted += 1
-
-    return deleted
-
-
-def generate_sample_email(filename, sample_name):
-    """
-    Generate a unique email for a sample from a multi-sample VCF.
-    Format: samplename.filename@genomics.local
-    """
-    clean_filename = Path(filename).stem.replace(".", "_").replace("-", "_")[:30]
-    clean_sample   = sample_name.replace(".", "_").replace("-", "_")
-    return f"{clean_sample}.{clean_filename}@genomics.local"
-
-
+        return deleted
 # ─────────────────────────────────────────────────────────────
 # SECTION 4: VCF LINE PARSING
 # ─────────────────────────────────────────────────────────────
@@ -292,28 +253,6 @@ def parse_info_field(info_str):
             info[item.strip()] = True
     return info
 
-def extract_gene_from_csq(csq_value):
-    """Extract gene name from VEP CSQ field. Gene is at index 1."""
-    if not csq_value:
-        return None
-    first_entry = csq_value.split(",")[0]
-    parts = first_entry.split("|")
-    if len(parts) > 1:
-        gene = parts[1].strip()
-        return gene if gene else None
-    return None
-
-
-def extract_gene_from_ann(ann_value):
-    """Extract gene name from SnpEff ANN field. Gene is at index 3."""
-    if not ann_value:
-        return None
-    first_entry = ann_value.split(",")[0]
-    parts = first_entry.split("|")
-    if len(parts) > 3:
-        gene = parts[3].strip()
-        return gene if gene else None
-    return None
 
 def parse_variant_line(line, sample_index=0,gene_index=None):
     """

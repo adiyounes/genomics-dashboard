@@ -1,22 +1,11 @@
 """
-modules/ingestion/vcf_parser.py
-================================
-Updated VCF parser with:
-  - Multi-sample support (one user per sample)
-  - Auto-detect genome assembly (GRCh38 vs older)
-  - Progress updates every 50,000 variants
-  - Duplicate upload handling (replace old upload)
-  - Skip homozygous_ref variants (no mutation = no risk)
 
-Usage:
-    python modules/ingestion/vcf_parser.py
 """
 
 import sys
 import gzip
 from pathlib import Path
 from datetime import datetime
-
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from database.connect import get_connection, execute_insert, execute_query
@@ -48,103 +37,77 @@ BATCH_SIZE     = 50000
 PROGRESS_EVERY = 50000
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 1: ASSEMBLY DETECTION
-# ─────────────────────────────────────────────────────────────
+
+# ASSEMBLY DETECTION: FUNCTION TO DETECT IN WHICH ASSEMBLY THE VCF FILE FORMATED AND NOT ACCEPT OLD FORMATS
 
 def detect_assembly(header_lines):
-    """
-    Scan VCF header lines to detect the genome assembly version.
-
-    Returns:
-        'GRCh38'  → current standard, ClinVar compatible
-        'GRCh37'  → previous standard (hg19)
-        'older'   → build 36 or earlier
-        'unknown' → no assembly info found in header
-    """
     for line in header_lines:
-        line_lower = line.lower() 
-        if any(ident in line_lower for ident in GRCH38_IDENTIFIERS):
+        if 'GRCh38' in line or 'hg38' in line:
             return "GRCh38"
+        
+    return None
 
-        if any(x in line_lower for x in ["grch37", "hg19", "b37", "build 37"]):
-            return "GRCh37"
-
-        if any(x in line_lower for x in ["b36", "hg18", "build 36", "ncbi36", "b35", "hg17"]):
-            return "older"
-
-    return "unknown"
-
-
-def warn_assembly(assembly, filename):
-    """Print a clear warning if the assembly is not GRCh38."""
-    if assembly == "GRCh38":
-        print(f"  ✅ Assembly: GRCh38 — fully compatible with ClinVar")
-    elif assembly == "GRCh37":
-        print(f"  ⚠️  Assembly: GRCh37 (hg19) — coordinates differ from ClinVar (GRCh38)")
-        print(f"     Annotation matching will be unreliable.")
-        print(f"     Consider lifting over to GRCh38 using UCSC liftOver.")
-    elif assembly == "older":
-        print(f"  ❌ Assembly: pre-GRCh37 — incompatible with ClinVar")
-        print(f"     Variants will be stored but annotation matching will fail.")
-        print(f"     Strongly recommend lifting over to GRCh38.")
-    else:
-        print(f"  ⚠️  Assembly: unknown — could not detect from header")
-        print(f"     Annotation matching may be unreliable.")
-
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 2: HEADER PARSING
-# ─────────────────────────────────────────────────────────────
+# A simple open vcf file
 
 def open_vcf(filepath):
-    """Open a VCF file whether plain text or gzip compressed."""
-    if str(filepath).endswith(".gz"):
-        return gzip.open(filepath, "rt", encoding="utf-8")
-    return open(filepath, "r", encoding="utf-8")
+    if not (filepath.endswith('.vcf') or filepath.endswith('.vcf.gz')):
+        return None
+    elif filepath.endswith('.vcf.gz'):
+        return gzip.open(filepath,"rt", encoding="utf-8")
+    else:
+        return open(filepath, "r", encoding="utf-8")
 
-def load_gene_index():
+
+def load_gene_index() -> dict:
     """Load all gene + exon coordinates into memory for fast lookup."""
-    from database.connect import execute_query
+    
 
     print("  Loading gene index into memory...")
     index = {}
 
-    # Load exons first — exonic hits have priority
-    exons = execute_query("""
-        SELECT chromosome, start_pos, end_pos, gene_name
-        FROM exon_coordinates
-        ORDER BY chromosome, start_pos
-    """)
+    # Load exons first
+    exons = execute_query(
+        """
+            SELECT chromosome, start_pos, end_pos, gene_name 
+            FROM exon_coordinates
+            ORDER BY chromosome, start_pos
+        """
+    )
+
     for row in exons:
         chrom = row['chromosome']
         if chrom not in index:
             index[chrom] = []
-        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name']))
+        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name'], 'exonic'))
+        # a tuple because fixed, protected data,less memory,Faster than lists
+    
+    genes = execute_query(
+        """
+            SELECT chromosome, start_pos, end_pos, gene_name
+            from gene_coordinates
+            ORDER BY chromosome, start_pos
+        """
+    )
 
-    # Load genes as fallback
-    genes = execute_query("""
-        SELECT chromosome, start_pos, end_pos, gene_name
-        FROM gene_coordinates
-        ORDER BY chromosome, start_pos
-    """)
     for row in genes:
         chrom = row['chromosome']
         if chrom not in index:
             index[chrom] = []
-        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name']))
+        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name'], 'unknown'))
 
     total = sum(len(v) for v in index.values())
-    print(f"  Gene index ready — {total:,} entries across {len(index)} chromosomes")
+    print(f" Gene index ready {total:,} entries")
     return index
 
+    # Load genes as fallback
 
-def lookup_gene_memory(index, chromosome, position):
-    """Instant gene lookup from in-memory index."""
-    for start, end, gene_name in index.get(chromosome, []):
-        if start <= position <= end:
-            return gene_name
-    return None
+def look_up_memory(index: dict, chrom: str, pos: int):
+    for start, end, gene_name, region in index.get(chrom, []):
+        if start <= pos <= end:
+            return gene_name, region
+    return None, None
+
+
 
 def parse_vcf_header(filepath):
     """

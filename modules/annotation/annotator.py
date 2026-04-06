@@ -1,0 +1,653 @@
+"""
+modules/annotation/annotator.py
+================================
+The Annotation Engine.
+
+Takes flagged variants from the variants table and:
+  1. Matches them against ClinVar (disease risk)
+  2. Matches them against PharmGKB (drug interactions)
+  3. Calculates a risk score (0.0 to 1.0) per variant
+  4. Writes results into variant_annotations table
+  5. Writes final summary into risk_summary table
+
+Risk Score Formula:
+  Base score from clinical significance:
+    Pathogenic              → 1.0
+    Pathogenic/Likely path  → 0.9
+    Likely pathogenic       → 0.8
+    VUS                     → 0.5
+    PharmGKB associated     → 0.6
+
+  Zygosity multiplier:
+    homozygous_alt  → × 1.0  (both copies broken — full risk)
+    heterozygous    → × 0.7  (one working copy — reduced risk)
+    unknown         → × 0.5  (uncertain)
+
+Usage:
+    python modules/annotation/annotator.py
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+from database.connect import execute_query, execute_insert, get_connection
+
+
+# ── Base risk scores by clinical significance ─────────────────
+SIGNIFICANCE_SCORES = {
+    "pathogenic"                        : 1.0,
+    "pathogenic/likely pathogenic"      : 0.9,
+    "pathogenic, low penetrance"        : 0.7,
+    "likely pathogenic"                 : 0.8,
+    "uncertain significance"            : 0.5,
+    "likely benign"                     : 0.1,
+    "benign"                            : 0.0,
+}
+
+# ── Zygosity multipliers ──────────────────────────────────────
+ZYGOSITY_MULTIPLIERS = {
+    "homozygous_alt" : 1.0,   # both copies affected — full risk
+    "heterozygous"   : 0.7,   # one working copy — reduced risk
+    "unknown"        : 0.5,   # uncertain
+}
+
+# ── PharmGKB evidence level scores ───────────────────────────
+EVIDENCE_SCORES = {
+    "1A": 0.9,
+    "1B": 0.75,
+    "2A": 0.6,
+    "2B": 0.5,
+    "3" : 0.4,
+    "4" : 0.3,
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 1: RISK SCORE CALCULATION
+# ─────────────────────────────────────────────────────────────
+
+def calculate_clinvar_score(clinical_significance, zygosity):
+    """
+    Calculate a ClinVar risk score using significance + zygosity.
+
+    Formula:
+        base_score × zygosity_multiplier
+
+    Args:
+        clinical_significance : string from ClinVar e.g. 'Pathogenic'
+        zygosity              : string from variants table
+
+    Returns:
+        float between 0.0 and 1.0
+    """
+    if not clinical_significance:
+        return 0.0
+
+    # Normalize to lowercase for lookup
+    sig_lower  = clinical_significance.lower().strip()
+
+    # Find base score — check for partial matches too
+    # e.g. 'Pathogenic; risk factor' should still map to Pathogenic
+    base_score = 0.0
+    for key, score in SIGNIFICANCE_SCORES.items():
+        if key in sig_lower:
+            base_score = score
+            break
+
+    # Apply zygosity multiplier
+    multiplier = ZYGOSITY_MULTIPLIERS.get(zygosity or "unknown", 0.5)
+
+    # Calculate final score and clamp between 0.0 and 1.0
+    final_score = round(min(max(base_score * multiplier, 0.0), 1.0), 3)
+    return final_score
+
+
+def calculate_pharmgkb_score(evidence_level, zygosity):
+    """
+    Calculate a PharmGKB risk score using evidence level + zygosity.
+
+    Args:
+        evidence_level : PharmGKB level e.g. '1A', '2B'
+        zygosity       : string from variants table
+
+    Returns:
+        float between 0.0 and 1.0
+    """
+    base_score = EVIDENCE_SCORES.get(str(evidence_level).strip(), 0.3)
+    multiplier = ZYGOSITY_MULTIPLIERS.get(zygosity or "unknown", 0.5)
+    return round(min(max(base_score * multiplier, 0.0), 1.0), 3)
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 2: CLINVAR MATCHING
+# ─────────────────────────────────────────────────────────────
+
+def match_clinvar(variant):
+    """
+    Find ClinVar annotations for a variant.
+
+    Matching strategy (in order of confidence):
+      1. Exact match: chromosome + position + ref + alt
+      2. Position match: chromosome + position (looser, catches different notation)
+      3. Gene match: gene name only (weakest, catches all known variants in gene)
+
+    Returns list of annotation dicts.
+    """
+    annotations = []
+
+    # ── Match 1: Exact coordinate + allele match ──
+    exact_matches = execute_query("""
+        SELECT
+            clinvar_id,
+            clinical_significance,
+            condition_name,
+            review_status,
+            gene_name
+        FROM clinvar_annotations
+        WHERE chromosome  = %s
+        AND   position    = %s
+        AND   ref_allele  = %s
+        AND   alt_allele  = %s
+    """, params=(
+        variant['chromosome'],
+        variant['position'],
+        variant['ref_allele'],
+        variant['alt_allele'],
+    ))
+
+    for match in exact_matches:
+        score = calculate_clinvar_score(
+            match['clinical_significance'],
+            variant['zygosity']
+        )
+        annotations.append({
+            "source"          : "clinvar",
+            "source_id"       : match['clinvar_id'],
+            "annotation_type" : classify_significance(match['clinical_significance']),
+            "risk_score"      : score,
+            "match_type"      : "exact",
+            "notes"           : (
+                f"{match['clinical_significance']} | "
+                f"{match['condition_name'] or 'Unknown condition'} | "
+                f"Review: {match['review_status'] or 'N/A'}"
+            ),
+        })
+
+    # ── Match 2: Position match only (if no exact match) ──
+    if not annotations and variant.get('chromosome') and variant.get('position'):
+        position_matches = execute_query("""
+            SELECT
+                clinvar_id,
+                clinical_significance,
+                condition_name,
+                review_status,
+                gene_name
+            FROM clinvar_annotations
+            WHERE chromosome = %s
+            AND   position   = %s
+            LIMIT 5
+        """, params=(variant['chromosome'], variant['position']))
+
+        for match in position_matches:
+            score = calculate_clinvar_score(
+                match['clinical_significance'],
+                variant['zygosity']
+            ) * 0.8   # reduce score for position-only match
+            annotations.append({
+                "source"          : "clinvar",
+                "source_id"       : match['clinvar_id'],
+                "annotation_type" : classify_significance(match['clinical_significance']),
+                "risk_score"      : round(score, 3),
+                "match_type"      : "position",
+                "notes"           : (
+                    f"{match['clinical_significance']} | "
+                    f"{match['condition_name'] or 'Unknown condition'} | "
+                    f"Position match only"
+                ),
+            })
+
+    # ── Match 3: Gene match only (if still no match) ──
+    if not annotations and variant.get('gene_name'):
+        gene_matches = execute_query("""
+            SELECT
+                clinvar_id,
+                clinical_significance,
+                condition_name,
+                review_status
+            FROM clinvar_annotations
+            WHERE gene_name = %s
+            AND   clinical_significance IN (
+                'Pathogenic',
+                'Likely pathogenic',
+                'Pathogenic/Likely pathogenic'
+            )
+            ORDER BY
+                CASE clinical_significance
+                    WHEN 'Pathogenic' THEN 1
+                    WHEN 'Pathogenic/Likely pathogenic' THEN 2
+                    WHEN 'Likely pathogenic' THEN 3
+                END
+            LIMIT 3
+        """, params=(variant['gene_name'],))
+
+        for match in gene_matches:
+            score = calculate_clinvar_score(
+                match['clinical_significance'],
+                variant['zygosity']
+            ) * 0.5   # significantly reduce score for gene-only match
+            annotations.append({
+                "source"          : "clinvar",
+                "source_id"       : match['clinvar_id'],
+                "annotation_type" : classify_significance(match['clinical_significance']),
+                "risk_score"      : round(score, 3),
+                "match_type"      : "gene",
+                "notes"           : (
+                    f"{match['clinical_significance']} | "
+                    f"{match['condition_name'] or 'Unknown condition'} | "
+                    f"Gene-level match only"
+                ),
+            })
+
+    return annotations
+
+
+def classify_significance(significance):
+    """Convert ClinVar significance string to a clean annotation type."""
+    if not significance:
+        return "unknown"
+    sig = significance.lower()
+    if "pathogenic" in sig and "likely" not in sig:
+        return "pathogenic"
+    if "likely pathogenic" in sig:
+        return "likely_pathogenic"
+    if "uncertain" in sig or "vus" in sig:
+        return "VUS"
+    if "benign" in sig:
+        return "benign"
+    return "other"
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 3: PHARMGKB MATCHING
+# ─────────────────────────────────────────────────────────────
+
+def match_pharmgkb(variant):
+    """
+    Find PharmGKB drug interactions for a variant's gene.
+
+    PharmGKB doesn't store coordinates — it stores gene-drug relationships.
+    So we match on gene name only.
+
+    Returns list of annotation dicts.
+    """
+    if not variant.get('gene_name'):
+        return []
+
+    matches = execute_query("""
+        SELECT
+            pharmgkb_id,
+            drug_name,
+            effect_summary,
+            evidence_level,
+            phenotype_category
+        FROM pharmgkb_annotations
+        WHERE gene_name = %s
+        ORDER BY
+            CASE evidence_level
+                WHEN '1A' THEN 1
+                WHEN '1B' THEN 2
+                WHEN '2A' THEN 3
+                WHEN '2B' THEN 4
+                WHEN '3'  THEN 5
+                WHEN '4'  THEN 6
+                ELSE 7
+            END
+        LIMIT 10
+    """, params=(variant['gene_name'],))
+
+    annotations = []
+    for match in matches:
+        score = calculate_pharmgkb_score(
+            match['evidence_level'],
+            variant['zygosity']
+        )
+        annotations.append({
+            "source"          : "pharmgkb",
+            "source_id"       : match['pharmgkb_id'],
+            "annotation_type" : "pharmacogenomics",
+            "risk_score"      : score,
+            "match_type"      : "gene",
+            "notes"           : (
+                f"{match['effect_summary']} | "
+                f"Drug: {match['drug_name']} | "
+                f"Evidence: {match['evidence_level']} | "
+                f"Category: {match['phenotype_category']}"
+            ),
+        })
+
+    return annotations
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 4: DATABASE WRITES
+# ─────────────────────────────────────────────────────────────
+
+def save_annotations(variant_id, annotations):
+    """
+    Save a list of annotations to the variant_annotations table.
+    Returns the highest risk score found.
+    """
+    if not annotations:
+        return 0.0
+
+    max_score = 0.0
+
+    for ann in annotations:
+        execute_insert("""
+            INSERT INTO variant_annotations (
+                variant_id,
+                source,
+                source_id,
+                annotation_type,
+                risk_score,
+                notes
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING annotation_id
+        """, params=(
+            variant_id,
+            ann['source'],
+            ann['source_id'],
+            ann['annotation_type'],
+            ann['risk_score'],
+            ann['notes'],
+        ))
+
+        if ann['risk_score'] > max_score:
+            max_score = ann['risk_score']
+
+    return max_score
+
+
+def update_variant_risk_score(variant_id, risk_score):
+    """Update the risk_score column on the variant itself."""
+    execute_query("""
+        UPDATE variants
+        SET risk_score = %s
+        WHERE variant_id = %s
+    """, params=(risk_score, variant_id), fetch=False)
+
+
+def save_risk_summary(upload_id):
+    """
+    Calculate and save the final risk summary for an upload.
+    Aggregates all variant scores into 4 module scores + overall.
+    """
+    # Get all annotated variants for this upload
+    variants = execute_query("""
+        SELECT
+            v.variant_id,
+            v.flag,
+            v.risk_score,
+            v.zygosity
+        FROM variants v
+        WHERE v.upload_id = %s
+        AND   v.risk_score IS NOT NULL
+    """, params=(upload_id,))
+
+    if not variants:
+        return None
+
+    # Separate scores by module
+    pathogenicity_scores    = []
+    pharmacogenomics_scores = []
+
+    for v in variants:
+        if v['flag'] in ('clinical', 'both') and v['risk_score']:
+            pathogenicity_scores.append(v['risk_score'])
+        if v['flag'] in ('pharmacogenomics', 'both') and v['risk_score']:
+            pharmacogenomics_scores.append(v['risk_score'])
+
+    # Calculate module scores — use max score per module
+    # (worst case is most clinically relevant)
+    path_score  = max(pathogenicity_scores)    if pathogenicity_scores    else 0.0
+    pgx_score   = max(pharmacogenomics_scores) if pharmacogenomics_scores else 0.0
+    crispr_score = 0.0   # filled in by CRISPR module later
+    micro_score  = 0.0   # filled in by microbiome module later
+
+    # Overall = weighted average of available scores
+    # Pathogenicity weighted higher (more clinically urgent)
+    weights = [0.5, 0.3, 0.1, 0.1]
+    scores  = [path_score, pgx_score, crispr_score, micro_score]
+    overall = round(sum(w * s for w, s in zip(weights, scores)), 3)
+
+    # Delete existing summary for this upload if re-running
+    execute_query(
+        "DELETE FROM risk_summary WHERE upload_id = %s",
+        params=(upload_id,), fetch=False
+    )
+
+    # Save new summary
+    summary_id = execute_insert("""
+        INSERT INTO risk_summary (
+            upload_id,
+            pathogenicity_score,
+            pharmacogenomics_score,
+            crispr_safety_score,
+            microbiome_score,
+            overall_score
+        ) VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING summary_id
+    """, params=(
+        upload_id,
+        round(path_score, 3),
+        round(pgx_score, 3),
+        crispr_score,
+        micro_score,
+        overall,
+    ))
+
+    return {
+        "pathogenicity"    : round(path_score, 3),
+        "pharmacogenomics" : round(pgx_score, 3),
+        "crispr"           : crispr_score,
+        "microbiome"       : micro_score,
+        "overall"          : overall,
+    }
+
+def get_variant_annotations_display(upload_id):
+    """
+    Returns deduplicated annotations grouped by condition for display.
+    Multiple ClinVar submitters for same condition are collapsed into one row
+    with a submitter count.
+    """
+    return execute_query("""
+        SELECT
+            v.variant_id,
+            v.chromosome,
+            v.position,
+            v.gene_name,
+            v.zygosity,
+            v.flag,
+            va.source,
+            va.annotation_type,
+            MAX(va.risk_score)                          as risk_score,
+            COUNT(va.annotation_id)                     as submitter_count,
+            SPLIT_PART(MAX(va.notes), ' | ', 2)         as condition_name
+        FROM variants v
+        JOIN variant_annotations va ON v.variant_id = va.variant_id
+        WHERE v.upload_id = %s
+        GROUP BY
+            v.variant_id,
+            v.chromosome,
+            v.position,
+            v.gene_name,
+            v.zygosity,
+            v.flag,
+            va.source,
+            va.annotation_type
+        ORDER BY risk_score DESC
+    """, params=(upload_id,))
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 5: MAIN ANNOTATION FUNCTION
+# ─────────────────────────────────────────────────────────────
+
+def annotate_upload(upload_id):
+    """
+    Run the full annotation pipeline for one upload.
+
+    Steps:
+        1. Load all variants for this upload
+        2. For each variant — match against ClinVar and/or PharmGKB
+        3. Save annotations to variant_annotations
+        4. Update risk_score on each variant
+        5. Calculate and save risk_summary
+
+    Args:
+        upload_id : the upload to annotate
+
+    Returns:
+        dict with summary statistics
+    """
+    print(f"\n{'='*60}")
+    print(f"  ANNOTATING upload_id = {upload_id}")
+    print(f"{'='*60}")
+
+    # ── Load variants ──
+    variants = execute_query("""
+        SELECT
+            variant_id, chromosome, position,
+            ref_allele, alt_allele, gene_name,
+            zygosity, flag
+        FROM variants
+        WHERE upload_id = %s
+        ORDER BY chromosome, position
+    """, params=(upload_id,))
+
+    if not variants:
+        print(f"  ❌ No variants found for upload_id={upload_id}")
+        return None
+
+    print(f"\n  Found {len(variants)} variants to annotate\n")
+
+    # ── Annotate each variant ──
+    stats = {
+        "total"          : len(variants),
+        "clinvar_hits"   : 0,
+        "pharmgkb_hits"  : 0,
+        "no_match"       : 0,
+        "annotations"    : 0,
+    }
+
+    for i, variant in enumerate(variants, 1):
+        variant_id = variant['variant_id']
+        gene       = variant['gene_name'] or "unknown"
+        flag       = variant['flag']      or "none"
+
+        print(f"  [{i}/{len(variants)}] {variant['chromosome']}:"
+              f"{variant['position']} {gene} ({flag})")
+
+        all_annotations = []
+
+        # ── ClinVar matching ──
+        if flag in ('clinical', 'both', None):
+            clinvar_hits = match_clinvar(variant)
+            if clinvar_hits:
+                all_annotations.extend(clinvar_hits)
+                stats['clinvar_hits'] += 1
+                best = max(clinvar_hits, key=lambda x: x['risk_score'])
+                print(f"    ✅ ClinVar: {best['annotation_type']} "
+                      f"(score={best['risk_score']}, "
+                      f"match={best['match_type']})")
+
+        # ── PharmGKB matching ──
+        if flag in ('pharmacogenomics', 'both'):
+            pgx_hits = match_pharmgkb(variant)
+            if pgx_hits:
+                all_annotations.extend(pgx_hits)
+                stats['pharmgkb_hits'] += 1
+                print(f"    💊 PharmGKB: {len(pgx_hits)} drug interactions found")
+                for hit in pgx_hits[:3]:   # show top 3
+                    print(f"       → {hit['notes'][:80]}")
+
+        # ── Also run ClinVar on pharmacogenomics variants ──
+        # CYP genes can also appear in ClinVar
+        if flag == 'pharmacogenomics':
+            clinvar_hits = match_clinvar(variant)
+            if clinvar_hits:
+                all_annotations.extend(clinvar_hits)
+                stats['clinvar_hits'] += 1
+
+        # ── Save annotations ──
+        if all_annotations:
+            max_score = save_annotations(variant_id, all_annotations)
+            update_variant_risk_score(variant_id, max_score)
+            stats['annotations'] += len(all_annotations)
+        else:
+            stats['no_match'] += 1
+            print(f"    ○ No match found")
+
+    # ── Calculate risk summary ──
+    print(f"\n  Calculating risk summary...")
+    summary = save_risk_summary(upload_id)
+
+    # ── Print results ──
+    print(f"\n{'='*60}")
+    print(f"  ANNOTATION COMPLETE")
+    print(f"{'='*60}")
+    print(f"\n  Variants processed  : {stats['total']}")
+    print(f"  ClinVar matches     : {stats['clinvar_hits']}")
+    print(f"  PharmGKB matches    : {stats['pharmgkb_hits']}")
+    print(f"  No match            : {stats['no_match']}")
+    print(f"  Total annotations   : {stats['annotations']}")
+
+    if summary:
+        print(f"\n  ── Risk Summary ──")
+        print(f"  Pathogenicity score    : {summary['pathogenicity']}")
+        print(f"  Pharmacogenomics score : {summary['pharmacogenomics']}")
+        print(f"  CRISPR safety score    : {summary['crispr']} (pending)")
+        print(f"  Microbiome score       : {summary['microbiome']} (pending)")
+        print(f"  ─────────────────────────────")
+        print(f"  Overall risk score     : {summary['overall']}")
+
+    return {**stats, "summary": summary}
+
+
+# ─────────────────────────────────────────────────────────────
+# SECTION 6: TEST RUN
+# ─────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+
+    # Get only uploads that haven't been annotated yet
+    unannotated = execute_query("""
+        SELECT
+            vu.upload_id,
+            vu.filename,
+            vu.total_variants
+        FROM vcf_uploads vu
+        WHERE vu.status = 'complete'
+        AND NOT EXISTS (
+            SELECT 1
+            FROM variants v
+            JOIN variant_annotations va ON v.variant_id = va.variant_id
+            WHERE v.upload_id = vu.upload_id
+        )
+        ORDER BY vu.upload_id
+    """)
+
+    if not unannotated:
+        print("✅ All uploads are already annotated.")
+        sys.exit(0)
+
+    print(f"\nFound {len(unannotated)} unannotated upload(s):\n")
+    for row in unannotated:
+        print(f"  upload_id={row['upload_id']} | "
+              f"{row['filename']} | "
+              f"{row['total_variants']} variants")
+
+    for row in unannotated:
+        annotate_upload(row['upload_id'])

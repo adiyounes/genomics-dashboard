@@ -48,7 +48,10 @@ def execute_insert(sql: str, params=None):
         cursor = conn.cursor()
         cursor.execute(sql,params)
         conn.commit()
-        return cursor.fetchone()[0]
+        try:
+            return cursor.fetchone()[0]
+        except Exception:
+            return None
     
     except Exception as e:
         print(f"query failed: {e}")

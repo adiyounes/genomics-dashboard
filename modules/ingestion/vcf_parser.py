@@ -7,6 +7,7 @@ import gzip
 from pathlib import Path
 from datetime import datetime
 sys.path.append(str(Path(__file__).parent.parent.parent))
+import re
 
 from database.connect import get_connection, execute_insert, execute_query
 
@@ -35,6 +36,7 @@ GRCH38_IDENTIFIERS = {
 
 BATCH_SIZE     = 50000
 PROGRESS_EVERY = 50000
+BATCH_SIZE = 5000
 
 
 
@@ -50,9 +52,11 @@ def detect_assembly(header_lines):
 # A simple open vcf file
 
 def open_vcf(filepath):
-    if not (filepath.endswith('.vcf') or filepath.endswith('.vcf.gz')):
+    filepath = Path(filepath)
+    if not (str(filepath).endswith('.vcf') or str(filepath).endswith('.vcf.gz')):
+        print("Rejected, only .vcf and .vcf.gz files accepted")
         return None
-    elif filepath.endswith('.vcf.gz'):
+    elif str(filepath).endswith('.vcf.gz'):
         return gzip.open(filepath,"rt", encoding="utf-8")
     else:
         return open(filepath, "r", encoding="utf-8")
@@ -101,7 +105,7 @@ def load_gene_index() -> dict:
 
     # Load genes as fallback
 
-def look_gene_memory(index: dict, chrom: str, pos: int):
+def lookup_gene_memory(index: dict, chrom: str, pos: int):
     for start, end, gene_name, region in index.get(chrom, []):
         if start <= pos <= end:
             return gene_name, region
@@ -132,7 +136,7 @@ def get_or_create_user(username, email) -> int:
         """
             SELECT user_id from users
                 WHERE email = %s;
-        """, (email)
+        """, (email,)
     )
 
     if existing:
@@ -143,7 +147,7 @@ def get_or_create_user(username, email) -> int:
                     INSERT INTO users (username, email)
                     VALUES (%s, %s)
                     RETURNING user_id; 
-                """, (username, email)
+                """, (username, email,)
 
         )
         return user_id
@@ -170,201 +174,137 @@ def update_upload_status(upload_id, status, total_variants=0):
 
 
 def delete_existing_upload(user_id, filename):
-    existing = execute_query(
-        """
-            SELECT user_id, filename
-            FROM vcf_uploads
-            WHERE user_id = %s
-            AND filename = %s;
-        """,(user_id, filename)
-    )
-
-    if not existing:
-        return 0
-    else:
-        deleted = execute_query(
+    execute_query(
             """
                 DELETE FROM vcf_uploads
                 WHERE user_id = %s
                 AND filename = %s
-                RETURNING 0;
+                RETURNING user_id, filename;
             """,(user_id,filename)
         )
-        return deleted
+        
 # ─────────────────────────────────────────────────────────────
 # SECTION 4: VCF LINE PARSING
 # ─────────────────────────────────────────────────────────────
 
 def decode_genotype(gt_raw):
-    """Convert raw genotype string to zygosity label."""
     gt_map = {
         "0/0": "homozygous_ref",
         "0/1": "heterozygous",
         "1/0": "heterozygous",
         "1/1": "homozygous_alt",
     }
-    # Normalize phased (|) to unphased (/)
     normalized = gt_raw.replace("|", "/") if gt_raw else ""
-    return gt_map.get(normalized, "unknown")
+    return gt_map.get(normalized,"unknown")
 
 
-def determine_flag(gene_name):
-    """Determine the pipeline flag for a variant based on its gene."""
-    if gene_name is None:
+def determine_flag(gene_name) -> str:
+    if not gene_name:
         return None
-    gene       = gene_name.upper().strip()
-    in_cyp     = gene in CYP_GENES
-    in_disease = gene in DISEASE_GENES
-    if in_cyp and in_disease:
-        return "both"
-    if in_cyp:
+    
+    
+    if gene_name in DISEASE_GENES:
+        if gene_name in CYP_GENES:
+            return "both"
+        else:
+            return "clinical"
+    if gene_name in CYP_GENES:
         return "pharmacogenomics"
-    if in_disease:
-        return "clinical"
+    
     return None
 
-
 def validate_variant(chrom, pos, ref, alt):
-    """Basic validation before inserting a variant."""
-    if not chrom:
-        return False, "missing chromosome"
-    if pos is None or pos < 1:
-        return False, f"invalid position: {pos}"
-    if not ref or ref == ".":
-        return False, "missing REF allele"
-    if not alt or alt == ".":
-        return False, "missing ALT allele"
-    valid_chars = set("ACGTNacgtn*<>[].,")
-    if not all(c in valid_chars for c in ref):
-        return False, f"invalid REF: {ref}"
-    return True, "ok"
+    if not chrom.startswith("chr"):
+        return False
+    if not isinstance(pos, int) or pos <= 0:
+        return False
+    if not re.match(r'^[ACTG]+$',ref) or not re.match(r'^[ACTG]+$',alt):
+        return False
+    return True
+    
 
 
-def parse_info_field(info_str):
-    """Parse the INFO field into a dictionary."""
+def parse_info_field(info_str) -> dict:
+    line = info_str.strip().split(';')
+
     info = {}
-    if not info_str or info_str == ".":
-        return info
-    for item in info_str.split(";"):
-        if "=" in item:
+    for item in line:
+        if '=' in item:
             key, value = item.split("=", 1)
-            info[key.strip()] = value.strip()
-        else:
-            info[item.strip()] = True
+            info[key] = value
     return info
+  
 
-
-def parse_variant_line(line, sample_index=0,gene_index=None):
-    """
-    Parse one VCF data line for a specific sample.
-
-    Args:
-        line         : raw VCF line string
-        sample_index : which sample column to read (0 = first sample)
-
-    Returns:
-        dict of parsed fields, or None if malformed
-    """
+def parse_variant_line(line)->dict:
     fields = line.strip().split("\t")
+    
     if len(fields) < 8:
         return None
-
+    
     try:
         chrom = fields[0].strip()
-        pos   = int(fields[1])
-        rsid  = fields[2] if fields[2] != "." else None
-        ref   = fields[3].strip().upper()
-        alt   = fields[4].strip().upper()
-        qual  = fields[5] if fields[5] != "." else None
-        info  = parse_info_field(fields[7])
+        pos = int(fields[1].strip())
+        rs_id = fields[2].strip() if fields[2] != "." else None
+        ref = fields[3].strip().upper()
+        alt = fields[4].strip().upper()
+        qual = float(fields[5].strip()) if fields[5] != "." else None
+        info = parse_info_field(fields[7].strip())
 
-        # Normalize chromosome format
+        filter_status = fields[6].strip()
+        if filter_status != "PASS" and filter_status != ".":
+            return None
+        
         if not chrom.startswith("chr"):
             chrom = f"chr{chrom}"
 
-        # Quality score
-        qual_float = None
-        if qual:
-            try:
-                qual_float = float(qual)
-            except ValueError:
-                pass
-
-        # Depth from INFO
-        depth = None
-        if "DP" in info:
-            try:
-                depth = int(info["DP"])
-            except (ValueError, TypeError):
-                pass
-
-        # Allele frequency from INFO
-        af = None
-        if "AF" in info:
-            try:
-                af = float(info["AF"])
-            except (ValueError, TypeError):
-                pass
-
-        # Genotype for requested sample
-        gt_raw     = None
-        zygosity   = None
-        sample_col = 9 + sample_index
-
-        if len(fields) > sample_col and len(fields) > 8:
-            fmt_keys    = fields[8].split(":")
-            sample_vals = fields[sample_col].split(":")
-            genotype    = dict(zip(fmt_keys, sample_vals))
-            gt_raw      = genotype.get("GT")
-
-            if gt_raw:
-                zygosity = decode_genotype(gt_raw)
-
-            # Depth from FORMAT if not in INFO
-            if depth is None and "DP" in genotype:
-                try:
-                    depth = int(genotype["DP"])
-                except (ValueError, TypeError):
-                    pass
-
-        # Gene name from INFO
-        # Gene name from INFO — try multiple sources in order
-        gene_name = info.get("Gene") or info.get("GENE")
-
-        # Try VEP CSQ format
-        if not gene_name and "CSQ" in info:
-            gene_name = extract_gene_from_csq(str(info["CSQ"]))
-
-        # Try SnpEff ANN format
-        if not gene_name and "ANN" in info:
-            gene_name = extract_gene_from_ann(str(info["ANN"]))
-
-        # Final fallback — in-memory coordinate lookup
-        if not gene_name and gene_index:
-            gene_name = lookup_gene_memory(gene_index, chrom, pos)
-
+        if not validate_variant(chrom, pos, ref, alt):
+            return None
+        
+        depth = int(info.get('DP', 0)) if info.get('DP') else None
+        allele_freq = float(info.get('AF', 0)) if info.get('AF') else None
+        
         return {
-            "chrom"    : chrom,
-            "pos"      : pos,
-            "rsid"     : rsid,
-            "ref"      : ref,
-            "alt"      : alt,
-            "qual"     : qual_float,
-            "depth"    : depth,
-            "af"       : af,
-            "gene_name": gene_name,
-            "zygosity" : zygosity,
+            'chrom'      : chrom,
+            'pos'        : pos,
+            'rs_id'      : rs_id,
+            'ref'        : ref,
+            'alt'        : alt,
+            'qual'        : qual,
+            'depth'      : depth,
+            'allele_freq': allele_freq,
+            'fields'     : fields,
         }
-
-    except (ValueError, IndexError):
+    except Exception as e:
         return None
+        
+def extract_sample_data(fields, sample_index, gene_index):
+    sample = fields[9 + sample_index].strip().split(":")
 
+    format_str = fields[8].strip().split(":")
+    gt_index = format_str.index('GT') if 'GT'in format_str else 0
+
+    genotype = sample[gt_index].strip()
+    zygosity = decode_genotype(genotype)
+
+    if zygosity == "homozygous_ref":
+        return None
+    
+    gene_name, region = lookup_gene_memory(gene_index,fields[0].strip(),int(fields[1].strip()))
+    
+    flag = determine_flag(gene_name)
+
+    return {
+            'zygosity'  : zygosity,
+            'gene_name' : gene_name,
+            'region'    : region,
+            'flag'      : flag,
+    }
 
 # ─────────────────────────────────────────────────────────────
 # SECTION 5: DATABASE INSERT
 # ─────────────────────────────────────────────────────────────
 
-def insert_variants_batch(cursor, upload_id, batch):
+def insert_variants_batch(cursor, batch):
     """Insert a batch of parsed variants into the database."""
     cursor.executemany("""
         INSERT INTO variants (
@@ -383,240 +323,107 @@ def insert_variants_batch(cursor, upload_id, batch):
 # SECTION 6: SINGLE SAMPLE INGESTION
 # ─────────────────────────────────────────────────────────────
 
-def ingest_single_sample(filepath, username, email,
-                          sample_index=0, sample_name="SAMPLE",
-                          assembly="unknown"):
-    """Ingest one sample from a VCF file."""
-    filepath  = Path(filepath)
-    user_id   = get_or_create_user(username, email)
-    filename  = f"{filepath.name}__sample_{sample_name}"
+def ingest_vcf(filepath, username=None, email=None):
+    if not filepath.exists():
+        print(f"FILE NOT FOUND: {filepath}")
+        return None
+    
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    # Handle duplicate — delete previous upload if exists
-    delete_existing_upload(user_id, filename)
+    print("\n" + "-" * 60)
+    print(f"INGESTING: {filepath.name}")
+    print("-" * 60)
 
-    upload_id = create_upload_record(user_id, filename, assembly)
-    conn      = get_connection()
-    cursor    = conn.cursor()
-
-    inserted = 0
-    skipped  = 0
-    flagged  = {"pharmacogenomics": 0, "clinical": 0, "both": 0}
-    batch    = []
-
+    print("\n[1/3] Reading VCF header...")
+    header_lines, _, samples = parse_vcf_header(filepath)
+    
+    if not detect_assembly(header_lines):
+        print("Rejected : only GRCh38 files accepted")
+        return None
+    
+    if not samples:
+        print("No samples found in VCF file")
+        return None
+    
+    print(f"Samples found: {len(samples)}")
+    
     gene_index = load_gene_index()
 
-    try:
-        with open_vcf(filepath) as f:
-            for line in f:
-                if line.startswith("#"):
+    user_id = get_or_create_user(username, email)
+
+    print("ingesting samples...")
+
+    upload_ids = {}
+    batches = {}
+    inserted = {}
+
+    for sample_name in samples:
+        upload_ids[sample_name] = create_upload_record(user_id, filepath.name)
+        batches[sample_name] = []
+        inserted[sample_name] = 0
+
+    # one pass through the file
+    with open_vcf(filepath) as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            
+            base = parse_variant_line(line)
+            if base is None:
+                continue
+            
+            for i, sample_name in enumerate(samples):
+                sample_data = extract_sample_data(base['fields'], i, gene_index)
+                if sample_data is None:
                     continue
-
-                variant = parse_variant_line(line, sample_index=sample_index,gene_index=gene_index)
-                if variant is None:
-                    skipped += 1
-                    continue
-
-                # Skip homozygous reference — no mutation, no risk
-                if variant["zygosity"] == "homozygous_ref":
-                    skipped += 1
-                    continue
-
-                # Validate
-                is_valid, _ = validate_variant(
-                    variant["chrom"], variant["pos"],
-                    variant["ref"],   variant["alt"]
-                )
-                if not is_valid:
-                    skipped += 1
-                    continue
-
-                # Flag
-                flag = determine_flag(variant["gene_name"])
-                if flag and flag in flagged:
-                    flagged[flag] += 1
-
-                batch.append((
-                    upload_id,
-                    variant["chrom"],
-                    variant["pos"],
-                    variant["ref"],
-                    variant["alt"],
-                    variant["rsid"],
-                    variant["gene_name"],
-                    variant["zygosity"],
-                    variant["qual"],
-                    variant["depth"],
-                    variant["af"],
-                    flag,
+                
+                batches[sample_name].append((
+                    upload_ids[sample_name],
+                    base['chrom'], base['pos'],
+                    base['ref'],   base['alt'],
+                    base['rs_id'],
+                    sample_data['gene_name'],
+                    sample_data['zygosity'],
+                    base['qual'],
+                    base['depth'],
+                    base['allele_freq'],
+                    sample_data['flag'],
                 ))
 
-                if len(batch) >= BATCH_SIZE:
-                    insert_variants_batch(cursor, upload_id, batch)
+                if len(batches[sample_name]) >= BATCH_SIZE:
+                    insert_variants_batch(cursor, batches[sample_name])
                     conn.commit()
-                    inserted += len(batch)
-                    batch = []
-                    if inserted % PROGRESS_EVERY == 0:
-                        conn.commit()
-                        print(f"    ↳ {inserted:,} variants inserted...")
+                    inserted[sample_name] += len(batches[sample_name])
+                    batches[sample_name] = []
+                    
+        for sample_name in samples:
+            if batches[sample_name]:
+                insert_variants_batch(cursor, batches[sample_name])
+                conn.commit()
+                inserted[sample_name] += len(batches[sample_name])
+                print(f"  Committed {len(batches[sample_name])} variants")
+            
+            
+            update_upload_status(upload_ids[sample_name], 'complete', inserted[sample_name])
+            print(f"  {sample_name}: {inserted[sample_name]:,} variants inserted")
+    cursor.close()
+    conn.close()
 
-        if batch:
-            insert_variants_batch(cursor, upload_id, batch)
-            conn.commit()
-            inserted += len(batch)
-
-        update_upload_status(upload_id, "complete", inserted)
-        return upload_id, inserted, skipped, flagged
-
-    except Exception as e:
-        conn.rollback()
-        update_upload_status(upload_id, "failed")
-        print(f"  ❌ Failed on sample {sample_name}: {e}")
-        raise
-
-    finally:
-        cursor.close()
-        conn.close()
-
-
+    return {
+        'samples'    : samples,
+        'upload_ids' : upload_ids,
+        'inserted'   : inserted,
+    }
 # ─────────────────────────────────────────────────────────────
 # SECTION 7: MAIN INGESTION FUNCTION
 # ─────────────────────────────────────────────────────────────
 
-def ingest_vcf(filepath, username=None, email=None):
-    """
-    Main entry point. Handles both single and multi-sample VCFs.
-    """
-    filepath   = Path(filepath)
-    start_time = datetime.now()
-
-    if not filepath.exists():
-        print(f"❌ File not found: {filepath}")
-        return None
-
-    print(f"\n{'='*60}")
-    print(f"  INGESTING : {filepath.name}")
-    print(f"  Started   : {start_time.strftime('%H:%M:%S')}")
-    print(f"{'='*60}")
-
-    # Parse header
-    print("\n[1/3] Reading VCF header...")
-    _, sample_names, assembly = parse_vcf_header(filepath)
-    warn_assembly(assembly, filepath.name)
-    print(f"  Samples found : {len(sample_names)}")
-
-    if len(sample_names) > 1:
-        preview = ', '.join(sample_names[:5])
-        suffix  = f"... +{len(sample_names)-5} more" if len(sample_names) > 5 else ""
-        print(f"  Sample names  : {preview}{suffix}")
-
-    # Ingest each sample
-    print(f"\n[2/3] Ingesting samples...")
-    results = []
-
-    for i, sample_name in enumerate(sample_names):
-        print(f"\n  Sample {i+1}/{len(sample_names)}: {sample_name}")
-
-        if len(sample_names) == 1 and username and email:
-            s_username = username
-            s_email    = email
-        else:
-            s_username = f"{Path(filepath.stem).stem}_{sample_name}"
-            s_email    = generate_sample_email(filepath.name, sample_name)
-
-        upload_id, inserted, skipped, flagged = ingest_single_sample(
-            filepath     = filepath,
-            username     = s_username,
-            email        = s_email,
-            sample_index = i,
-            sample_name  = sample_name,
-            assembly     = assembly,
-        )
-
-        results.append({
-            "sample"   : sample_name,
-            "upload_id": upload_id,
-            "inserted" : inserted,
-            "skipped"  : skipped,
-            "flagged"  : flagged,
-        })
-
-        print(f"    ✅ Inserted: {inserted:,} | Skipped: {skipped:,} | "
-              f"PGx: {flagged['pharmacogenomics']} | "
-              f"Clinical: {flagged['clinical']}")
-
-    # Summary
-    elapsed        = (datetime.now() - start_time).seconds
-    total_inserted = sum(r['inserted'] for r in results)
-    total_skipped  = sum(r['skipped']  for r in results)
-
-    print(f"\n[3/3] Complete!")
-    print(f"{'='*60}")
-    print(f"  File          : {filepath.name}")
-    print(f"  Assembly      : {assembly}")
-    print(f"  Samples       : {len(sample_names)}")
-    print(f"  Total inserted: {total_inserted:,}")
-    print(f"  Total skipped : {total_skipped:,}")
-    print(f"  Time elapsed  : {elapsed}s")
-    print(f"{'='*60}")
-
-    return results
-
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 8: TEST RUN
-# ─────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
-
-    sample_vcf = Path("data/raw/HG001_test.vcf")
-
-    if not sample_vcf.exists():
-        print("Creating sample VCF for testing...")
-        sample_content = """##fileformat=VCFv4.2
-                            ##reference=GRCh38
-                            ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
-                            ##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
-                            ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-                            ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
-                            #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tPATIENT_001
-                            chr1\t925952\trs1234567\tG\tA\t50\tPASS\tDP=30;AF=0.5;Gene=CFTR\tGT:DP\t0/1:30
-                            chr2\t179415139\trs3456789\tA\tG\t75\tPASS\tDP=60;AF=0.75;Gene=CYP2D6\tGT:DP\t1/1:60
-                            chr7\t117548628\trs4567890\tT\tC\t88\tPASS\tDP=22;AF=0.5;Gene=CYP2C19\tGT:DP\t0/1:22
-                            chr13\t32339916\trs5678901\tG\tT\t92\tPASS\tDP=55;AF=0.5;Gene=BRCA2\tGT:DP\t0/1:55
-                            chr17\t41244429\trs6789012\tA\tC\t95\tPASS\tDP=70;AF=1.0;Gene=BRCA1\tGT:DP\t1/1:70
-                            chr17\t41246709\trs7890123\tC\tG\t61\tPASS\tDP=33;AF=0.5;Gene=BRCA1\tGT:DP\t0/1:33
-                            chr19\t15879621\trs8901234\tT\tA\t44\tPASS\tDP=18;AF=0.5;Gene=CYP3A4\tGT:DP\t0/1:18
-                            chr22\t19724571\trs9012345\tG\tC\t83\tPASS\tDP=40;AF=0.25;Gene=NF2\tGT:DP\t0/0:40
-                            chr22\t19724772\trs1902345\tT\tG\t77\tPASS\tDP=28;AF=0.5;Gene=TP53\tGT:DP\t0/1:28
-                            """
-        sample_vcf.write_text(sample_content)
-        print(f"  Created {sample_vcf}\n")
-
-    results = ingest_vcf(
-        filepath = sample_vcf,
-        username = "NA12878_test",
-        email    = "na12878_test@giab.org"
+    from pathlib import Path
+    result = ingest_vcf(
+        filepath = Path("data/raw/sample.vcf"),
+        username = "test_user",
+        email    = "test@genomics.com"
     )
-
-    if results:
-        print("\n── Verifying inserted variants ──")
-        for result in results:
-            print(f"\n  Sample: {result['sample']} (upload_id={result['upload_id']})")
-            variants = execute_query("""
-                SELECT chromosome, position, gene_name, zygosity, flag
-                FROM variants
-                WHERE upload_id = %s
-                ORDER BY chromosome, position
-            """, params=(result['upload_id'],))
-
-            print(f"  {'CHROM':<8} {'POS':<12} {'GENE':<10} {'ZYGOSITY':<20} {'FLAG'}")
-            print(f"  {'-'*65}")
-            for v in variants:
-                print(
-                    f"  {v['chromosome']:<8} "
-                    f"{v['position']:<12} "
-                    f"{str(v['gene_name']):<10} "
-                    f"{str(v['zygosity']):<20} "
-                    f"{str(v['flag'])}"
-                )
-            print(f"  Total: {len(variants)} variants")
+    print(result)

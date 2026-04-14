@@ -29,66 +29,12 @@ BATCH_SIZE = 1000
 
 
 # ─────────────────────────────────────────────────────────────
-# SECTION 1: SCHEMA
-# ─────────────────────────────────────────────────────────────
-
-CREATE_TABLES_SQL = """
--- Gene coordinates table
-CREATE TABLE IF NOT EXISTS gene_coordinates (
-    gene_coord_id  SERIAL PRIMARY KEY,
-    gene_name      TEXT NOT NULL,
-    gene_id        TEXT,              -- Ensembl gene ID e.g. ENSG00000012048
-    chromosome     TEXT NOT NULL,
-    start_pos      BIGINT NOT NULL,
-    end_pos        BIGINT NOT NULL,
-    strand         CHAR(1),           -- '+' or '-'
-    biotype        TEXT               -- protein_coding, lncRNA, etc.
-);
-
--- Exon coordinates table
-CREATE TABLE IF NOT EXISTS exon_coordinates (
-    exon_coord_id  SERIAL PRIMARY KEY,
-    gene_coord_id  INT REFERENCES gene_coordinates(gene_coord_id),
-    gene_name      TEXT NOT NULL,
-    chromosome     TEXT NOT NULL,
-    start_pos      BIGINT NOT NULL,
-    end_pos        BIGINT NOT NULL,
-    strand         CHAR(1),
-    exon_number    INT,
-    transcript_id  TEXT
-);
-
--- Indexes for fast coordinate lookup
-CREATE INDEX IF NOT EXISTS idx_gene_coord_lookup
-    ON gene_coordinates(chromosome, start_pos, end_pos);
-
-CREATE INDEX IF NOT EXISTS idx_gene_coord_name
-    ON gene_coordinates(gene_name);
-
-CREATE INDEX IF NOT EXISTS idx_exon_coord_lookup
-    ON exon_coordinates(chromosome, start_pos, end_pos);
-
-CREATE INDEX IF NOT EXISTS idx_exon_gene_name
-    ON exon_coordinates(gene_name);
-"""
-
-
-# ─────────────────────────────────────────────────────────────
 # SECTION 2: GTF PARSING
 # ─────────────────────────────────────────────────────────────
 
 def parse_attributes(attr_string):
-    """
-    Parse the GTF attributes column into a dictionary.
 
-    GTF attributes look like:
-        gene_id "ENSG00000012048"; gene_name "BRCA1"; gene_biotype "protein_coding";
-
-    Returns dict like:
-        {'gene_id': 'ENSG00000012048', 'gene_name': 'BRCA1', ...}
-    """
     attrs = {}
-    # Match key "value" pairs
     for match in re.finditer(r'(\w+)\s+"([^"]+)"', attr_string):
         attrs[match.group(1)] = match.group(2)
     return attrs

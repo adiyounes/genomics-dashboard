@@ -153,13 +153,13 @@ def get_or_create_user(username, email) -> int:
         return user_id
 
 
-def create_upload_record(user_id, filename):
+def create_upload_record(user_id, filename, notes=None):
     return execute_insert(
         """
-            INSERT INTO vcf_uploads (user_id, filename)
-            VALUES (%s, %s)
+            INSERT INTO vcf_uploads (user_id, filename, notes)
+            VALUES (%s, %s, %s)
             RETURNING upload_id;
-        """, (user_id, filename)
+        """, (user_id, filename, notes)
     )
 
 
@@ -359,7 +359,7 @@ def ingest_vcf(filepath, username=None, email=None):
     inserted = {}
 
     for sample_name in samples:
-        upload_ids[sample_name] = create_upload_record(user_id, filepath.name)
+        upload_ids[sample_name] = create_upload_record(user_id, filepath.name, f"assembly=GRCh38")
         batches[sample_name] = []
         inserted[sample_name] = 0
 

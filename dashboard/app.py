@@ -354,6 +354,9 @@ if page == "Upload & Analyse":
                     username = username,
                     email    = email,
                 )
+                print(f"DEBUG results type: {type(results)}")
+                print(f"DEBUG results value: {results}")
+
 
                 if not results:
                     st.error("Failed to parse VCF file.")
@@ -362,25 +365,19 @@ if page == "Upload & Analyse":
                 progress.progress(60, text="Annotating variants...")
                 status.info("🧪 Step 2/2 — Running annotation engine...")
 
-                for result in results:
-                    annotate_upload(result['upload_id'])
+                for sample_name, upload_id in results['upload_ids'].items():
+                    annotate_upload(upload_id)
 
                 progress.progress(100, text="Complete!")
                 status.empty()
 
-                total_inserted = sum(r['inserted'] for r in results)
+                total_inserted = sum(results['inserted'].values())
                 st.success(
                     f"✅ Analysis complete — "
                     f"{total_inserted:,} variants ingested across "
                     f"{len(results)} sample(s)"
                 )
-                for result in results:
-                    if result.get('assembly') and result['assembly'] != 'GRCh38':
-                        st.warning(
-                                    f"⚠️ Assembly detected: {result['assembly']} — "
-                                    f"this pipeline is optimised for GRCh38. "
-                                    f"Annotation accuracy may be reduced."
-                        )
+                
                 time.sleep(1)
                 st.rerun()
 
@@ -421,6 +418,7 @@ elif page == "Browse Results":
         label = (
             f"{u['username']} — {u['filename']} "
             f"({u['total_variants']} variants, {flagged_count} flagged)"
+            f"[ID: {u['upload_id']}]"
         )
         upload_labels[label] = u['upload_id']
     selected_label = st.selectbox(

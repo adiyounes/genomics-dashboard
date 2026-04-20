@@ -1,5 +1,5 @@
 # genomics-dashboard (work still going on)
-A unified genomic analysis pipeline   |   pharmacogenomics, pathogenicity prediction, CRISPR simulation, and microbiome integration
+A unified genomic analysis pipeline   |   pharmacogenomics, pathogenicity prediction
 
 ## Modules
 
@@ -8,8 +8,6 @@ A unified genomic analysis pipeline   |   pharmacogenomics, pathogenicity predic
 - ✅ Annotation,  variant annotation against ClinVar
 - 🔄 Dashboard, interactive interface (in progress)
 - 🔄 Pathogenicity prediction (in progress)
-- ⏳ CRISPR simulation. planned
-- ⏳ Microbiome integration, planned
 
 ## Stack
 

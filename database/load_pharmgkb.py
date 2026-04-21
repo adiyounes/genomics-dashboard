@@ -1,23 +1,8 @@
-"""
-WEEK 2 — PharmGKB Data Loader
-================================
-Reads relationships.tsv and loads gene-drug relationships
-into the pharmgkb_annotations table in genomics_db.
-
-We filter to:
-  - Only Gene → Chemical relationships
-  - Only 'associated' (not 'not associated' or 'ambiguous')
-  - Only rows with clinical or variant annotation evidence
-
-Run from your project root:
-  python database/load_pharmgkb.py
-"""
-
 import csv
 import psycopg2
 from pathlib import Path
 
-# ── Database connection ──────────────────────────────────────
+
 DB_CONFIG = {
     "host"     : "localhost",
     "database" : "genomics_db",
@@ -26,17 +11,14 @@ DB_CONFIG = {
     "port"     : "5432"
 }
 
-# ── File path ────────────────────────────────────────────────
+
 PHARMGKB_FILE = Path("data/raw/relationships.tsv")
 
-# ── Only keep rows with these evidence types ─────────────────
 KEEP_EVIDENCE = {"ClinicalAnnotation", "VariantAnnotation"}
 
-# ── Only keep confirmed associations ─────────────────────────
+
 KEEP_ASSOCIATION = {"associated"}
 
-# ── CYP genes — the core pharmacogenomics genes ──────────────
-# These get flagged specially in your pipeline
 CYP_GENES = {
     "CYP1A2", "CYP2B6", "CYP2C8", "CYP2C9", "CYP2C19",
     "CYP2D6", "CYP2E1", "CYP3A4", "CYP3A5", "CYP3A7",
@@ -46,23 +28,17 @@ CYP_GENES = {
 
 
 def connect():
-    """Create and return a database connection."""
     return psycopg2.connect(**DB_CONFIG)
 
 
 def clean_value(value):
-    """Convert empty or missing values to None."""
     if value in ("", "-", "NA", "N/A", "na"):
         return None
     return value
 
 
 def determine_phenotype_category(pk, pd, evidence):
-    """
-    Determine the phenotype category from PK/PD flags and evidence.
-    PK = Pharmacokinetics (how body processes drug — metabolism)
-    PD = Pharmacodynamics (how drug affects body — efficacy/toxicity)
-    """
+
     if pk and pk.strip():
         return "Metabolism/PK"
     if pd and pd.strip():
@@ -73,10 +49,6 @@ def determine_phenotype_category(pk, pd, evidence):
 
 
 def build_effect_summary(gene, drug, association, pk, pd):
-    """
-    Build a human-readable effect summary string.
-    This is what shows up on your dashboard.
-    """
     category = ""
     if pk and pk.strip():
         category = "metabolism"
@@ -89,7 +61,6 @@ def build_effect_summary(gene, drug, association, pk, pd):
 
 
 def load_pharmgkb():
-    """Load PharmGKB gene-drug relationships into the database."""
     print(f"Opening {PHARMGKB_FILE}...")
 
     if not PHARMGKB_FILE.exists():
@@ -100,7 +71,6 @@ def load_pharmgkb():
     conn   = connect()
     cursor = conn.cursor()
 
-    # Clear existing data before reloading
     cursor.execute("TRUNCATE TABLE pharmgkb_annotations RESTART IDENTITY;")
     print("Cleared existing PharmGKB data.")
 
@@ -112,7 +82,6 @@ def load_pharmgkb():
 
         for row in reader:
 
-            # ── Filter 1: Must be Gene → Chemical relationship ──
             if row.get("Entity1_type") != "Gene":
                 skipped += 1
                 continue
@@ -120,20 +89,19 @@ def load_pharmgkb():
                 skipped += 1
                 continue
 
-            # ── Filter 2: Must be a confirmed association ──
+
             association = row.get("Association", "").strip().lower()
             if association not in KEEP_ASSOCIATION:
                 skipped += 1
                 continue
 
-            # ── Filter 3: Must have clinical or variant evidence ──
+
             evidence = row.get("Evidence", "")
             evidence_types = set(e.strip() for e in evidence.split(","))
             if not evidence_types.intersection(KEEP_EVIDENCE):
                 skipped += 1
                 continue
 
-            # ── Extract fields ──
             gene       = clean_value(row.get("Entity1_name"))
             drug       = clean_value(row.get("Entity2_name"))
             pk         = clean_value(row.get("PK"))
@@ -144,19 +112,15 @@ def load_pharmgkb():
                 skipped += 1
                 continue
 
-            # ── Build derived fields ──
+
             phenotype_category = determine_phenotype_category(pk, pd, evidence)
             effect_summary     = build_effect_summary(gene, drug, association, pk, pd)
 
-            # ── Determine evidence level ──
-            # ClinicalAnnotation = stronger evidence (like PharmGKB 1A/1B)
-            # VariantAnnotation  = weaker evidence (like PharmGKB 3/4)
             if "ClinicalAnnotation" in evidence_types:
                 evidence_level = "1A" if gene in CYP_GENES else "1B"
             else:
                 evidence_level = "3"
 
-            # ── Insert row ──
             cursor.execute("""
                 INSERT INTO pharmgkb_annotations (
                     gene_name,
@@ -190,12 +154,12 @@ def verify():
     conn   = connect()
     cursor = conn.cursor()
 
-    # Total count
+
     cursor.execute("SELECT COUNT(*) FROM pharmgkb_annotations;")
     count = cursor.fetchone()[0]
     print(f"\nTotal rows in pharmgkb_annotations: {count:,}")
 
-    # CYP genes specifically (most important for your project)
+
     print("\nCYP gene drug relationships (your pharmacogenomics core):")
     cursor.execute("""
         SELECT gene_name, drug_name, phenotype_category, evidence_level
@@ -207,7 +171,6 @@ def verify():
     for row in cursor.fetchall():
         print(f"  {row[0]:<12} {row[1]:<35} {row[2]:<20} level {row[3]}")
 
-    # Breakdown by category
     print("\nBreakdown by phenotype category:")
     cursor.execute("""
         SELECT phenotype_category, COUNT(*) as count
@@ -218,7 +181,6 @@ def verify():
     for row in cursor.fetchall():
         print(f"  {row[0]:<25} : {row[1]:,}")
 
-    # Top 10 most studied genes
     print("\nTop 10 most studied genes:")
     cursor.execute("""
         SELECT gene_name, COUNT(*) as drug_count

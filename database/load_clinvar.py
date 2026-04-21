@@ -1,24 +1,8 @@
-"""
-WEEK 2 — ClinVar Data Loader
-==============================
-Reads variant_summary.txt.gz and loads a filtered subset
-into the clinvar_annotations table in genomics_db.
-
-We filter to:
-  - Human assembly GRCh38 only
-  - Only Pathogenic, Likely pathogenic, and VUS variants
-  - Only variants with a known gene symbol
-
-Run from your project root:
-  python database/load_clinvar.py
-"""
-
 import gzip
 import csv
 import psycopg2
 from pathlib import Path
 
-# ── Database connection ──────────────────────────────────────
 DB_CONFIG = {
     "host"     : "localhost",
     "database" : "genomics_db",
@@ -27,10 +11,8 @@ DB_CONFIG = {
     "port"     : "5432"
 }
 
-# ── File path ────────────────────────────────────────────────
 CLINVAR_FILE = Path("data/raw/variant_summary.txt.gz")
 
-# ── Only load these significance categories ──────────────────
 KEEP_SIGNIFICANCE = {
     "Pathogenic",
     "Likely pathogenic",
@@ -38,10 +20,7 @@ KEEP_SIGNIFICANCE = {
     "Pathogenic/Likely pathogenic",
 }
 
-# ── Only load GRCh38 (most current human genome assembly) ────
 KEEP_ASSEMBLY = "GRCh38"
-
-# ── Batch size for database inserts (faster than one by one) ─
 BATCH_SIZE = 1000
 
 
@@ -51,23 +30,12 @@ def connect():
 
 
 def clean_value(value):
-    """
-    ClinVar uses '-' to mean NULL/missing.
-    Convert those to None so PostgreSQL stores them as NULL.
-    """
     if value in ("-", "", "na", "NA", "N/A"):
         return None
     return value
 
 
 def load_clinvar(limit=None):
-    """
-    Load ClinVar variants into the database.
-
-    Args:
-        limit: If set, only load this many rows (useful for testing).
-               Set to None to load everything.
-    """
     print(f"Opening {CLINVAR_FILE}...")
 
     if not CLINVAR_FILE.exists():
@@ -78,7 +46,6 @@ def load_clinvar(limit=None):
     conn   = connect()
     cursor = conn.cursor()
 
-    # Clear existing ClinVar data before reloading
     cursor.execute("TRUNCATE TABLE clinvar_annotations RESTART IDENTITY;")
     print("Cleared existing ClinVar data.")
 
@@ -91,35 +58,29 @@ def load_clinvar(limit=None):
 
         for i, row in enumerate(reader):
 
-            # ── Progress update every 500k rows ──
             if i % 500000 == 0 and i > 0:
                 print(f"  Scanned {i:,} rows — inserted {inserted:,} so far...")
 
-            # ── Stop early if limit is set (for testing) ──
             if limit and inserted >= limit:
                 break
 
-            # ── Filter 1: Only GRCh38 ──
             if row.get("Assembly") != KEEP_ASSEMBLY:
                 skipped += 1
                 continue
 
-            # ── Filter 2: Only meaningful clinical significance ──
             significance = row.get("ClinicalSignificance", "")
             if not any(s in significance for s in KEEP_SIGNIFICANCE):
                 skipped += 1
                 continue
 
-            # ── Filter 3: Must have a gene symbol ──
             gene = clean_value(row.get("GeneSymbol"))
             if gene is None:
                 skipped += 1
                 continue
 
-            # ── Extract the columns we need ──
             chromosome = clean_value(row.get("Chromosome"))
             if chromosome:
-                chromosome = f"chr{chromosome}"   # normalize to 'chr17' format
+                chromosome = f"chr{chromosome}"  
 
             position   = clean_value(row.get("PositionVCF"))
             if position:
@@ -155,13 +116,11 @@ def load_clinvar(limit=None):
                 accession,
             ))
 
-            # ── Insert batch when full ──
             if len(batch) >= BATCH_SIZE:
                 insert_batch(cursor, batch)
                 inserted += len(batch)
                 batch = []
 
-        # ── Insert any remaining rows ──
         if batch:
             insert_batch(cursor, batch)
             inserted += len(batch)
@@ -193,7 +152,6 @@ def insert_batch(cursor, batch):
 
 
 def verify():
-    """Quick check — print row count and a few sample rows."""
     conn   = connect()
     cursor = conn.cursor()
 
@@ -227,7 +185,6 @@ def verify():
 
 
 if __name__ == "__main__":
-    # ── First run: test with 5000 rows to make sure it works ──
     print("=== LOADING CLINVAR DATA (test: 5,000 rows) ===\n")
     load_clinvar(limit=None)
     verify()

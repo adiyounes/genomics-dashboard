@@ -1,20 +1,3 @@
-"""
-database/load_gtf.py
-=====================
-Loads Ensembl GTF file into two tables:
-  - gene_coordinates  : one row per gene (chromosome, start, end, strand)
-  - exon_coordinates  : one row per exon (links to gene)
-
-After loading, the VCF parser can resolve gene names from coordinates alone,
-making the pipeline work on any raw GRCh38 VCF file.
-
-Usage:
-    python database/load_gtf.py
-
-GTF file expected at:
-    data/raw/Homo_sapiens.GRCh38.109.gtf.gz
-"""
-
 import sys
 import gzip
 import re
@@ -28,9 +11,6 @@ GTF_PATH   = Path("data/raw/Homo_sapiens.GRCh38.109.gtf.gz")
 BATCH_SIZE = 1000
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 2: GTF PARSING
-# ─────────────────────────────────────────────────────────────
 
 def parse_attributes(attr_string):
 
@@ -41,7 +21,6 @@ def parse_attributes(attr_string):
 
 
 def normalize_chrom(chrom):
-    """Normalize chromosome name to chr-prefixed format."""
     chrom = str(chrom).strip()
     # GTF uses '1', '2', 'X', 'MT' — we need 'chr1', 'chr2', 'chrX', 'chrM'
     if chrom == "MT":
@@ -52,17 +31,11 @@ def normalize_chrom(chrom):
 
 
 def is_standard_chrom(chrom):
-    """Only keep standard chromosomes — skip scaffolds and patches."""
     standard = {f"chr{i}" for i in range(1, 23)} | {"chrX", "chrY", "chrM"}
     return chrom in standard
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 3: LOADER
-# ─────────────────────────────────────────────────────────────
-
 def create_schema(conn):
-    """Create gene_coordinates and exon_coordinates tables."""
     cursor = conn.cursor()
     cursor.execute(CREATE_TABLES_SQL)
     conn.commit()
@@ -71,7 +44,6 @@ def create_schema(conn):
 
 
 def check_already_loaded(conn):
-    """Return True if tables already have data."""
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM gene_coordinates")
     count = cursor.fetchone()[0]
@@ -80,16 +52,6 @@ def check_already_loaded(conn):
 
 
 def load_gtf(gtf_path=GTF_PATH):
-    """
-    Parse the GTF file and load genes + exons into the database.
-
-    Strategy:
-        - First pass: collect all gene entries → insert into gene_coordinates
-        - Second pass: collect all exon entries → insert into exon_coordinates
-          using a gene_name → gene_coord_id lookup map
-
-    Only loads protein_coding genes by default (most clinically relevant).
-    """
     gtf_path = Path(gtf_path)
     if not gtf_path.exists():
         print(f"❌ GTF file not found: {gtf_path}")
@@ -122,7 +84,7 @@ def load_gtf(gtf_path=GTF_PATH):
 
     gene_batch   = []
     genes_loaded = 0
-    genes_seen   = set()   # avoid duplicate gene entries
+    genes_seen   = set() 
 
     with gzip.open(gtf_path, "rt", encoding="utf-8") as f:
         for line in f:
@@ -149,7 +111,6 @@ def load_gtf(gtf_path=GTF_PATH):
             if not gene_name:
                 continue
 
-            # Skip duplicate gene entries (same name, same chrom)
             key = (gene_name, chrom)
             if key in genes_seen:
                 continue
@@ -180,7 +141,6 @@ def load_gtf(gtf_path=GTF_PATH):
                 if genes_loaded % 10000 == 0:
                     print(f"    ↳ {genes_loaded:,} genes loaded...")
 
-    # Insert remaining genes
     if gene_batch:
         cursor.executemany("""
             INSERT INTO gene_coordinates
@@ -192,20 +152,17 @@ def load_gtf(gtf_path=GTF_PATH):
 
     print(f"  ✅ {genes_loaded:,} genes loaded")
 
-    # ── Build gene_name → gene_coord_id lookup map ──
     print("\n[2/3] Building gene lookup map...")
     cursor.execute("""
         SELECT gene_coord_id, gene_name, chromosome
         FROM gene_coordinates
     """)
-    # Map (gene_name, chromosome) → gene_coord_id
     gene_id_map = {
         (row[1], row[2]): row[0]
         for row in cursor.fetchall()
     }
     print(f"  ✅ {len(gene_id_map):,} entries in lookup map")
 
-    # ── Pass 2: Load exons ──
     print(f"\n[3/3] Loading exons...")
 
     exon_batch   = []
@@ -238,7 +195,6 @@ def load_gtf(gtf_path=GTF_PATH):
                 exons_skipped += 1
                 continue
 
-            # Look up the gene_coord_id
             gene_coord_id = gene_id_map.get((gene_name, chrom))
             if not gene_coord_id:
                 exons_skipped += 1
@@ -272,7 +228,6 @@ def load_gtf(gtf_path=GTF_PATH):
                 if exons_loaded % 100000 == 0:
                     print(f"    ↳ {exons_loaded:,} exons loaded...")
 
-    # Insert remaining exons
     if exon_batch:
         cursor.executemany("""
             INSERT INTO exon_coordinates
@@ -296,30 +251,10 @@ def load_gtf(gtf_path=GTF_PATH):
     print(f"{'='*50}")
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 4: COORDINATE LOOKUP FUNCTION
-# ─────────────────────────────────────────────────────────────
 
 def lookup_gene(chromosome, position):
-    """
-    Find the gene name for a given chromosome + position.
-
-    Lookup strategy:
-        1. Check exon_coordinates first — if hit, variant is exonic (higher confidence)
-        2. Fall back to gene_coordinates — variant is intronic
-        3. Return None if no gene found
-
-    Args:
-        chromosome : e.g. 'chr17'
-        position   : integer position e.g. 41244429
-
-    Returns:
-        dict with keys: gene_name, region ('exonic' or 'intronic'), strand
-        or None if not found
-    """
     from database.connect import execute_query
 
-    # ── Check exons first ──
     exon_hit = execute_query("""
         SELECT gene_name, strand
         FROM exon_coordinates
@@ -336,7 +271,7 @@ def lookup_gene(chromosome, position):
             "strand"    : exon_hit[0]['strand'],
         }
 
-    # ── Fall back to gene body ──
+
     gene_hit = execute_query("""
         SELECT gene_name, strand
         FROM gene_coordinates
@@ -356,14 +291,10 @@ def lookup_gene(chromosome, position):
     return None
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 5: TEST
-# ─────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
     load_gtf()
 
-    # Test the lookup function on known positions
+
     print("\n── Testing coordinate lookup ──\n")
 
     test_cases = [

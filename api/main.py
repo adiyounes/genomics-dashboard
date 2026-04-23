@@ -144,18 +144,18 @@ async def upload_vcf(
         if temp_path.exists():
             temp_path.unlink
 
-AGENT_API = "http://54.195.19.197:8000/analyse"
+# AGENT_API = "http://54.195.19.197:8000/analyse"
 
-@app.post("/research")
-async def get_research(gene: str, condition: str):
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                AGENT_API,
-                json={"gene": gene, "disease":  condition}
-            )
-            if response.status_code == 200:
-                return response.json()
-            return {"error": "Agent unailable"}
-    except Exception as e:
-        return {"error": str(e)}
+# @app.post("/research")
+# async def get_research(gene: str, condition: str):
+#     try:
+#         async with httpx.AsyncClient(timeout=60.0) as client:
+#             response = await client.post(
+#                 AGENT_API,
+#                 json={"gene": gene, "disease":  condition}
+#             )
+#             if response.status_code == 200:
+#                 return response.json()
+#             return {"error": "Agent unailable"}
+#     except Exception as e:
+#         return {"error": str(e)}

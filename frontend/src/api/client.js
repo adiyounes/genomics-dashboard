@@ -1,0 +1,39 @@
+const BASE_URL = 'http://localhost:8000'
+
+export async function getUploads() {
+    const response = await fetch('${BASE_URL}/uploads')
+    return response.json()
+}
+
+export async function getVariants(uploadId) {
+    const response = await fetch('${BASE_URL}/variants/${uploadId}')
+    return response.json()
+}
+
+export async function getRiskSummary(uploadId) {
+    const response = await fetch('${BASE_URL}/risksummary/${uploadId}')
+    return response.json()
+}
+
+export async function getDrugs(uploadId) {
+    const response = await fetch('${BASE_URL}/drugs/${uploadId}')
+    return response.json()
+}
+
+export async function getStats() {
+    const response = await fetch('${BASE_URL}/stats')
+    return response.json()
+}
+
+export async function uploadVcf(file, username, email) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('username', username)
+    formData.append('email', email)
+
+    const response = await fetch('${BASE_URL}/upload', {
+        method: 'POST',
+        body: formData
+    })
+    return response.json()
+}

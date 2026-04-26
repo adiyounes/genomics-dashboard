@@ -31,7 +31,7 @@ export async function uploadVcf(file, username, email) {
     formData.append('username', username)
     formData.append('email', email)
 
-    const response = await fetch('${BASE_URL}/upload', {
+    const response = await fetch(`${BASE_URL}/upload`, {
         method: 'POST',
         body: formData
     })

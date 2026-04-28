@@ -1,27 +1,27 @@
 const BASE_URL = 'http://localhost:8000'
 
 export async function getUploads() {
-    const response = await fetch('${BASE_URL}/uploads')
+    const response = await fetch(`${BASE_URL}/uploads`)
     return response.json()
 }
 
 export async function getVariants(uploadId) {
-    const response = await fetch('${BASE_URL}/variants/${uploadId}')
+    const response = await fetch(`${BASE_URL}/variants/${uploadId}`)
     return response.json()
 }
 
 export async function getRiskSummary(uploadId) {
-    const response = await fetch('${BASE_URL}/risksummary/${uploadId}')
+    const response = await fetch(`${BASE_URL}/risksummary/${uploadId}`)
     return response.json()
 }
 
 export async function getDrugs(uploadId) {
-    const response = await fetch('${BASE_URL}/drugs/${uploadId}')
+    const response = await fetch(`${BASE_URL}/drugs/${uploadId}`)
     return response.json()
 }
 
 export async function getStats() {
-    const response = await fetch('${BASE_URL}/stats')
+    const response = await fetch(`${BASE_URL}/stats`)
     return response.json()
 }
 

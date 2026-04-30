@@ -13,14 +13,21 @@ export default function ResultsPage() {
 
     useEffect(()=> {
         if(!selectedId) return
+        console.log('selectedId:', selectedId, typeof selectedId)
+        console.log('summary:', summary)
+console.log('variants:', variants)
         getVariants(selectedId).then(data => setVariant(data))
-        getRiskSummary(selectedId).then(data=>setSummary([0]))
+        getRiskSummary(selectedId).then(data=>{
+            console.log('raw summary data:', data)
+            setSummary(data[0])})
     },[selectedId])
 
     return (
     <div>
         <h1>Browse Result</h1>
         <select onChange={e => setSelectedId(e.target.value)}>
+            <option value="">Select an upload...</option>
+
             {uploads.map(u => (
                 <option key={u.upload_id} value={u.upload_id}>
                     {u.username} — {u.filename} ({u.total_variants} variants)

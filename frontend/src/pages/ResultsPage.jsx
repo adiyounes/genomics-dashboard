@@ -13,12 +13,8 @@ export default function ResultsPage() {
 
     useEffect(()=> {
         if(!selectedId) return
-        console.log('selectedId:', selectedId, typeof selectedId)
-        console.log('summary:', summary)
-console.log('variants:', variants)
         getVariants(selectedId).then(data => setVariant(data))
         getRiskSummary(selectedId).then(data=>{
-            console.log('raw summary data:', data)
             setSummary(data[0])})
     },[selectedId])
 

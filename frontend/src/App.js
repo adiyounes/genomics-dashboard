@@ -10,7 +10,7 @@ function App() {
       <div className="app-layout">
         <nav>
           <NavLink to="/" className="nav-brand" e>
-            🧬 <span>Genomic Analysis Platform</span>
+            🧬 GenomeDx <span>Genomic Analysis Platform</span>
           </NavLink>
           <NavLink to="/" end className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>Upload</NavLink>
           <NavLink to="/results" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>Results</NavLink>

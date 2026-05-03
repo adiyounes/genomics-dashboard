@@ -30,15 +30,31 @@ export default function UploadPage() {
     
 
     return (
-        <div>
-            <h1>Upload VCF File</h1>
-            <input type="text" placeholder="Username" onChange={e => setUsername(e.target.value)}/>
-            <input type="text" placeholder='Email' onChange={e => setEmail(e.target.value)}/>
-            <input type="file" onChange={e => setFile(e.target.files[0])}/>
-            <button onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Analyse...' : 'Analyse'}</button>
-            {error && <p style={{color: 'red'}}>{error}</p>}
-            {result && <p style={{color: 'green'}}>✅ {result.inserted ? Object.values(result.inserted).reduce((a,b) => a+b, 0) : 0} variants inserted</p>}
-        </div>
-    )
+  <div className="upload-page">
+    <div className="page-title">Upload & Analyse</div>
+    <div className="page-subtitle">VCF → Annotation → Risk Scores</div>
+
+    <div className="form-group">
+      <label className="form-label">Username</label>
+      <input type="text" placeholder="e.g. patient_001" onChange={e => setUsername(e.target.value)} />
+    </div>
+
+    <div className="form-group">
+      <label className="form-label">Email</label>
+      <input type="email" placeholder="e.g. patient@clinic.org" onChange={e => setEmail(e.target.value)} />
+    </div>
+
+    <div className="form-group">
+      <label className="form-label">VCF File</label>
+      <input type="file" onChange={e => setFile(e.target.files[0])} />
+    </div>
+
+    <button className="btn" onClick={handleSubmit} disabled={loading}>
+      {loading ? 'Analysing...' : 'Analyse'}
+    </button>
+
+    {error && <div className="alert alert-error">{error}</div>}
+    {result && <div className="alert alert-success">✅ {Object.values(result.inserted || {}).reduce((a,b) => a+b, 0)} variants inserted</div>}
+  </div>
+)
 }

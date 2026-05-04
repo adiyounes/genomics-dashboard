@@ -35,9 +35,6 @@ EVIDENCE_SCORES = {
 }
 
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 1: RISK SCORE CALCULATION
-# ─────────────────────────────────────────────────────────────
 
 def calculate_clinvar_score(clinical_significance, zygosity):
    
@@ -46,8 +43,7 @@ def calculate_clinvar_score(clinical_significance, zygosity):
     
     multiplier = ZYGOSITY_MULTIPLIERS.get((zygosity or "unknown").lower(), 0.5)
     base_score = SIGNIFICANCE_SCORES.get(clinical_significance.lower().strip(), 0.1)
-    return round(max(min(base_score * multiplier, 0.0), 1.0), 3)
-
+    return round(min(max(base_score * multiplier, 0.0), 1.0), 3)
 
 def calculate_pharmgkb_score(evidence_level, zygosity):
 
@@ -57,10 +53,6 @@ def calculate_pharmgkb_score(evidence_level, zygosity):
     base_score = EVIDENCE_SCORES.get(evidence_level.strip(), 0.1)
     multiplier = ZYGOSITY_MULTIPLIERS.get((zygosity or "unknown").lower(), 0.5)
     return round(min(max(base_score * multiplier, 0.0), 1.0), 3)
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 2: CLINVAR MATCHING
-# ─────────────────────────────────────────────────────────────
 
 def match_clinvar(variant):
     annotations = []
@@ -176,7 +168,6 @@ def match_clinvar(variant):
 
     return annotations
 
-
 def classify_significance(significance):
     if not significance:
         return "unknown"
@@ -190,11 +181,6 @@ def classify_significance(significance):
     if "benign" in sig:
         return "benign"
     return "other"
-
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 3: PHARMGKB MATCHING
-# ─────────────────────────────────────────────────────────────
 
 def match_pharmgkb(variant):
 
@@ -245,11 +231,6 @@ def match_pharmgkb(variant):
 
     return annotations
 
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 4: DATABASE WRITES
-# ─────────────────────────────────────────────────────────────
-
 def save_annotations(variant_id, annotations):
     if not annotations:
         return 0.0
@@ -281,7 +262,6 @@ def save_annotations(variant_id, annotations):
 
     return max_score
 
-
 def update_variant_risk_score(variant_id, risk_score):
     """Update the risk_score column on the variant itself."""
     execute_insert("""
@@ -289,7 +269,6 @@ def update_variant_risk_score(variant_id, risk_score):
         SET risk_score = %s
         WHERE variant_id = %s
     """, params=(risk_score, variant_id))
-
 
 def save_risk_summary(upload_id):
     # Get all annotated variants for this upload
@@ -364,27 +343,7 @@ def save_risk_summary(upload_id):
         "overall"          : overall,
     }
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 5: MAIN ANNOTATION FUNCTION
-# ─────────────────────────────────────────────────────────────
-
 def annotate_upload(upload_id):
-    """
-    Run the full annotation pipeline for one upload.
-
-    Steps:
-        1. Load all variants for this upload
-        2. For each variant — match against ClinVar and/or PharmGKB
-        3. Save annotations to variant_annotations
-        4. Update risk_score on each variant
-        5. Calculate and save risk_summary
-
-    Args:
-        upload_id : the upload to annotate
-
-    Returns:
-        dict with summary statistics
-    """
     print(f"\n{'='*60}")
     print(f"  ANNOTATING upload_id = {upload_id}")
     print(f"{'='*60}")
@@ -487,11 +446,6 @@ def annotate_upload(upload_id):
         print(f"  Overall risk score     : {summary['overall']}")
 
     return {**stats, "summary": summary}
-
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 6: TEST RUN
-# ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
 

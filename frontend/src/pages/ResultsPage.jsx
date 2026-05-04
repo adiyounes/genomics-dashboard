@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getUploads, getVariants, getRiskSummary, getDrugs} from '../api/client'
+import { getUploads, getVariants, getRiskSummary, getDrugs, getResearch} from '../api/client'
 
 function getRiskColor(score) {
     if (!score) return 'var(--text-dim)'
@@ -18,6 +18,7 @@ function getRiskLabel(score) {
 }
 
 
+
 export default function ResultsPage() {
     const [uploads, setUploads] = useState([])
     const [selectedId, setSelectedId] = useState(null)
@@ -29,6 +30,9 @@ export default function ResultsPage() {
     const [flaggedOnly, setFlaggedOnly] = useState(false)
     const [drugs, setDrugs] = useState([])
     const [drugSearch, setDrugSearch] = useState('')
+    const [research, setResearch] = useState(null)
+    const [researchLoading, setResearchLoading] = useState(false)
+    const [researchGene, setResearchGene] = useState(null)
 
     useEffect(()=>{
         getUploads().then(data => setUploads(data))
@@ -40,6 +44,22 @@ export default function ResultsPage() {
     getRiskSummary(selectedId).then(data => setSummary(data[0]))
     getDrugs(selectedId).then(data => setDrugs(data))
     }, [selectedId])
+
+    async function handleResearch(gene, condition) {
+        setResearchGene(gene)
+        setResearch(null)
+        setResearchLoading(true)
+        try {
+            const data = await getResearch(gene, condition || 'disease')
+            setResearch(data)
+        } catch(e) {
+            setResearch({error: "Agent unavailable"})
+        } finally {
+            setResearchLoading(false)
+        }
+    }
+
+
 
     const filtered = variants.filter(v => {
         if (geneSearch && !v.gene_name?.toLowerCase().includes(geneSearch.toLowerCase())) return false
@@ -56,6 +76,8 @@ export default function ResultsPage() {
         return drug.toLowerCase().includes(drugSearch.toLowerCase()) ||
            d.gene_name?.toLowerCase().includes(drugSearch.toLowerCase())
     })
+
+    
 
     return (
      <div>
@@ -136,6 +158,7 @@ export default function ResultsPage() {
                                     <th>Zygosity</th>
                                     <th>Flag</th>
                                     <th>Risk Score</th>
+                                    <th>Agent Research</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -149,11 +172,58 @@ export default function ResultsPage() {
                                         <td style={{color: getRiskColor(v.risk_score), fontWeight: 600}}>
                                             {v.risk_score || '—'}
                                         </td>
+                                        <td>
+                                            {v.gene_name && v.flag && (
+                                                <button className='btn-research'
+                                                    onClick={() => handleResearch(v.gene_name, v.flag === 'clinical' ? 'disease' : 'drug metabolism')}
+                                                >
+                                                    Research
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
+                    {researchLoading && (
+                        <div className="research-panel">
+                            <div className="research-panel-title">🔬 Searching PubMed + bioRxiv for {researchGene}...</div>
+                        </div>
+                    )}
+                    
+                    {research && !researchLoading && (
+                        <div className="research-panel">
+                            <div className="research-panel-title">
+                                📄 Research Summary — {researchGene}
+                                <span style={{fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: '1rem'}}>
+                                    {research.papers_read} papers read
+                                </span>
+                            </div>
+                            <div className="research-summary">
+                                {research.summary}
+                            </div>
+                            {research.top_papers && (
+                                <div style={{marginTop: '1rem'}}>
+                                    <div className="score-card-label" style={{marginBottom: '0.5rem'}}>Top Papers</div>
+                                    {research.top_papers.map(p => (
+                                        <div key={p.pmid} className="research-paper">
+                                            <a 
+                                                href={`https://pubmed.ncbi.nlm.nih.gov/${p.pmid}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                            >
+                                                {p.title}
+                                            </a>
+                                            <span style={{color: 'var(--text-dim)', fontSize: '0.7rem', marginLeft: '0.5rem'}}>
+                                                {p.year}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </>
             )}
 

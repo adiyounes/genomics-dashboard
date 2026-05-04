@@ -468,3 +468,63 @@ tr:hover td {
     line-height: 1.6;
     padding: 1rem;
 }
+
+.btn-research {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 0.25rem 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+}
+
+.btn-research:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--accent-bg);
+}
+
+.research-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.research-panel-title {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.research-summary {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+.research-paper {
+    font-size: 0.78rem;
+    margin-bottom: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.research-paper a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.research-paper a:hover {
+    text-decoration: underline;
+}

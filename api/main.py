@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import sys
 from pathlib import Path
 import httpx
+from pydantic import BaseModel
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -178,13 +179,17 @@ def get_reference_stats():
             (SELECT COUNT(*) FROM exon_coordinates) as exons
     """)
 
+class ResearchRequest(BaseModel):
+    gene: str
+    condition: str
+
 @app.post("/research")
-async def get_research(gene: str, condition: str):
+async def get_research(request: ResearchRequest):
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{AGENT_URL}/analyse",
-                json={"gene": gene, "disease": condition}
+                json={"gene": request.gene, "disease": request.condition}
             )
             if response.status_code == 200:
                 return response.json()

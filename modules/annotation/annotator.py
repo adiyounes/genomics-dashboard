@@ -1,32 +1,3 @@
-"""
-modules/annotation/annotator.py
-================================
-The Annotation Engine.
-
-Takes flagged variants from the variants table and:
-  1. Matches them against ClinVar (disease risk)
-  2. Matches them against PharmGKB (drug interactions)
-  3. Calculates a risk score (0.0 to 1.0) per variant
-  4. Writes results into variant_annotations table
-  5. Writes final summary into risk_summary table
-
-Risk Score Formula:
-  Base score from clinical significance:
-    Pathogenic              → 1.0
-    Pathogenic/Likely path  → 0.9
-    Likely pathogenic       → 0.8
-    VUS                     → 0.5
-    PharmGKB associated     → 0.6
-
-  Zygosity multiplier:
-    homozygous_alt  → × 1.0  (both copies broken — full risk)
-    heterozygous    → × 0.7  (one working copy — reduced risk)
-    unknown         → × 0.5  (uncertain)
-
-Usage:
-    python modules/annotation/annotator.py
-"""
-
 import sys
 from pathlib import Path
 

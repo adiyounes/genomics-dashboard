@@ -1,7 +1,3 @@
-"""
-
-"""
-
 import sys
 import gzip
 from pathlib import Path
@@ -183,10 +179,6 @@ def delete_existing_upload(user_id, filename):
             """,(user_id,filename)
         )
         
-# ─────────────────────────────────────────────────────────────
-# SECTION 4: VCF LINE PARSING
-# ─────────────────────────────────────────────────────────────
-
 def decode_genotype(gt_raw):
     gt_map = {
         "0/0": "homozygous_ref",
@@ -300,10 +292,6 @@ def extract_sample_data(fields, sample_index, gene_index):
             'flag'      : flag,
     }
 
-# ─────────────────────────────────────────────────────────────
-# SECTION 5: DATABASE INSERT
-# ─────────────────────────────────────────────────────────────
-
 def insert_variants_batch(cursor, batch):
     """Insert a batch of parsed variants into the database."""
     cursor.executemany("""
@@ -318,10 +306,6 @@ def insert_variants_batch(cursor, batch):
         )
     """, batch)
 
-
-# ─────────────────────────────────────────────────────────────
-# SECTION 6: SINGLE SAMPLE INGESTION
-# ─────────────────────────────────────────────────────────────
 
 def ingest_vcf(filepath, username=None, email=None):
     if not filepath.exists():
@@ -415,9 +399,6 @@ def ingest_vcf(filepath, username=None, email=None):
         'upload_ids' : upload_ids,
         'inserted'   : inserted,
     }
-# ─────────────────────────────────────────────────────────────
-# SECTION 7: MAIN INGESTION FUNCTION
-# ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     from pathlib import Path

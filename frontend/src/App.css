@@ -249,7 +249,7 @@ select:focus {
 
 .cards-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -457,4 +457,14 @@ tr:hover td {
 .filters-row select {
     width: 160px;
     cursor: pointer;
+}
+
+
+.disclaimer {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    line-height: 1.6;
+    padding: 1rem;
 }

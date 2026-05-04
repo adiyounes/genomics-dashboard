@@ -144,6 +144,38 @@ async def upload_vcf(
         if temp_path.exists():
             temp_path.unlink
 
+@app.get("/stats/genes")
+def get_top_genes():
+    return execute_query("""
+        SELECT gene_name, COUNT(*) as count
+        FROM variants
+        WHERE gene_name IS NOT NULL
+        AND flag IS NOT NULL
+        GROUP BY gene_name
+        ORDER BY count DESC
+        LIMIT 5
+    """)
+
+@app.get("/stats/risk-distribution")
+def get_risk_distribution():
+    return execute_query("""
+        SELECT
+            COUNT(CASE WHEN risk_score >= 0.7 THEN 1 END) as high,
+            COUNT(CASE WHEN risk_score >= 0.4 AND risk_score < 0.7 THEN 1 END) as moderate,
+            COUNT(CASE WHEN risk_score >= 0.1 AND risk_score < 0.4 THEN 1 END) as low,
+            COUNT(CASE WHEN risk_score < 0.1 THEN 1 END) as minimal,
+            COUNT(CASE WHEN risk_score IS NULL THEN 1 END) as unannotated
+        FROM variants
+    """)
+
+@app.get("/stats/reference")
+def get_reference_stats():
+    return execute_query("""
+        SELECT
+            (SELECT COUNT(*) FROM gene_coordinates) as genes,
+            (SELECT COUNT(*) FROM exon_coordinates) as exons
+    """)
+
 # AGENT_API = "http://54.195.19.197:8000/analyse"
 
 # @app.post("/research")

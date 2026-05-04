@@ -37,3 +37,18 @@ export async function uploadVcf(file, username, email) {
     })
     return response.json()
 }
+
+export async function getTopGenes() {
+    const response = await fetch(`${BASE_URL}/stats/genes`)
+    return response.json()
+}
+
+export async function getRiskDistribution() {
+    const response = await fetch(`${BASE_URL}/stats/risk-distribution`)
+    return response.json()
+}
+
+export async function getReferenceStats() {
+    const response = await fetch(`${BASE_URL}/stats/reference`)
+    return response.json()
+}

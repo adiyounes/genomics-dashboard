@@ -12,6 +12,8 @@ from modules.annotation.annotator import annotate_upload
 
 app = FastAPI(title="GenomeDX API")
 
+AGENT_URL = "http://localhost:8001"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -176,18 +178,16 @@ def get_reference_stats():
             (SELECT COUNT(*) FROM exon_coordinates) as exons
     """)
 
-# AGENT_API = "http://54.195.19.197:8000/analyse"
-
-# @app.post("/research")
-# async def get_research(gene: str, condition: str):
-#     try:
-#         async with httpx.AsyncClient(timeout=60.0) as client:
-#             response = await client.post(
-#                 AGENT_API,
-#                 json={"gene": gene, "disease":  condition}
-#             )
-#             if response.status_code == 200:
-#                 return response.json()
-#             return {"error": "Agent unailable"}
-#     except Exception as e:
-#         return {"error": str(e)}
+@app.post("/research")
+async def get_research(gene: str, condition: str):
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{AGENT_URL}/analyse",
+                json={"gene": gene, "disease": condition}
+            )
+            if response.status_code == 200:
+                return response.json()
+            return {"error": "Agent unavailable"}
+    except Exception as e:
+        return {"error": str(e)}

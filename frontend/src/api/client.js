@@ -52,3 +52,12 @@ export async function getReferenceStats() {
     const response = await fetch(`${BASE_URL}/stats/reference`)
     return response.json()
 }
+
+export async function getResearch(gene, condition) {
+    const response = await fetch(`${BASE_URL}/research`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({gene, condition})
+    })
+    return response.json()
+}

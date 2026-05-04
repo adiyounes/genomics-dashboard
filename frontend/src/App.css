@@ -287,6 +287,8 @@ select:focus {
 
 .table-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 800px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
@@ -300,6 +302,13 @@ table {
 thead {
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border);
+}
+
+thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    z-index: 1;
 }
 
 th {
@@ -373,4 +382,79 @@ tr:hover td {
 .filter-chip:has(input:checked) {
     border-color: var(--accent);
     color: var(--text-primary);
+}
+
+.table-wrapper::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: 2px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
+}
+
+.summary-bar {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.section-title {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    margin: 2rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.filters-row input,
+.filters-row select {
+    height: 38px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    padding: 0 0.9rem;
+    outline: none;
+    transition: border-color 0.15s;
+    margin-bottom: 0;
+}
+
+.filters-row input:focus,
+.filters-row select:focus {
+    border-color: var(--accent);
+}
+
+.filters-row input[type="text"] {
+    width: 50%;
+}
+
+.filters-row input[type="number"] {
+    width: 130px;
+}
+
+.filters-row select {
+    width: 160px;
+    cursor: pointer;
 }

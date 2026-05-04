@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getUploads, getVariants, getRiskSummary } from '../api/client'
+import { getUploads, getVariants, getRiskSummary, getDrugs} from '../api/client'
 
 function getRiskColor(score) {
     if (!score) return 'var(--text-dim)'
@@ -27,17 +27,19 @@ export default function ResultsPage() {
     const [flagFilter, setFlagFilter] = useState('all')
     const [minScore, setMinScore] = useState(0)
     const [flaggedOnly, setFlaggedOnly] = useState(false)
+    const [drugs, setDrugs] = useState([])
+    const [drugSearch, setDrugSearch] = useState('')
 
     useEffect(()=>{
         getUploads().then(data => setUploads(data))
     }, [])
 
-    useEffect(()=> {
-        if(!selectedId) return
-        getVariants(selectedId).then(data => setVariant(data))
-        getRiskSummary(selectedId).then(data=>{
-            setSummary(data[0])})
-    },[selectedId])
+    useEffect(() => {
+    if (!selectedId) return
+    getVariants(selectedId).then(data => setVariant(data))
+    getRiskSummary(selectedId).then(data => setSummary(data[0]))
+    getDrugs(selectedId).then(data => setDrugs(data))
+    }, [selectedId])
 
     const filtered = variants.filter(v => {
         if (geneSearch && !v.gene_name?.toLowerCase().includes(geneSearch.toLowerCase())) return false
@@ -45,6 +47,14 @@ export default function ResultsPage() {
         if (minScore > 0 && (!v.risk_score || v.risk_score < minScore)) return false
         if (flaggedOnly && !v.flag) return false
         return true
+    })
+
+    const filteredDrugs = drugs.filter(d => {
+        if (!drugSearch) return true
+        const parts = d.notes ? d.notes.split(' | ') : []
+        const drug = parts[1]?.replace('Drug: ', '') || ''
+        return drug.toLowerCase().includes(drugSearch.toLowerCase()) ||
+           d.gene_name?.toLowerCase().includes(drugSearch.toLowerCase())
     })
 
     return (
@@ -86,16 +96,17 @@ export default function ResultsPage() {
                             <div className="score-card-label-sub">{getRiskLabel(summary.pharmacogenomics_score)}</div>
                         </div>
                     </div>
+
                     
                     <div className="filters-row">
-                        <input type="text" placeholder="Search gene..." onChange={e => setGeneSearch(e.target.value)} style={{flex:1}}/>
-                        <select onChange={e => setFlagFilter(e.target.value)} style={{width:'auto'}}>
+                        <input type="text" placeholder="Search gene..." onChange={e => setGeneSearch(e.target.value)}/>
+                        <select onChange={e => setFlagFilter(e.target.value)}>
                             <option value="all">All flags</option>
                             <option value="clinical">Clinical</option>
                             <option value="pharmacogenomics">Pharmacogenomics</option>
                             <option value="both">Both</option>
                         </select>
-                        <input type="number" placeholder="Min score" min="0" max="1" step="0.1" onChange={e => setMinScore(parseFloat(e.target.value) || 0)} style={{width:'100px'}}/>
+                        <input type="number" placeholder="Min score" min="0" max="1" step="0.1" onChange={e => setMinScore(parseFloat(e.target.value) || 0)}/>
                         <label style={{display:'flex', alignItems:'center', gap:'0.5rem', color:'var(--text-muted)', fontSize:'0.8rem'}}>
                             <input type="checkbox" onChange={e => setFlaggedOnly(e.target.checked)}/>
                             Flagged only
@@ -104,6 +115,16 @@ export default function ResultsPage() {
                     <div style={{fontSize:'0.75rem', color:'var(--text-dim)', marginBottom:'0.5rem'}}>
                         {filtered.length} of {variants.length} variants
                     </div>
+                    
+                    {variants.length > 0 && (
+                                            <div className="summary-bar">
+                                                <span>Total: {variants.length}</span>
+                                                <span style={{color: 'var(--risk-low)'}}>Clinical: {variants.filter(v => v.flag === 'clinical' || v.flag === 'both').length}</span>
+                                                <span style={{color: 'var(--risk-minimal)'}}>Pharmacogenomics: {variants.filter(v => v.flag === 'pharmacogenomics' || v.flag === 'both').length}</span>
+                                                <span style={{color: 'var(--text-dim)'}}>Unflagged: {variants.filter(v => !v.flag).length}</span>
+                                                <span style={{color: 'var(--risk-high)'}}>High Risk: {variants.filter(v => v.risk_score >= 0.7).length}</span>
+                                            </div>
+                                            )}
 
                     <div className="table-wrapper">
                         <table>
@@ -135,6 +156,49 @@ export default function ResultsPage() {
                     </div>
                 </>
             )}
-        </div>
+
+            {drugs.length > 0 && (
+                <>
+                    <h2 className="section-title">Drug Interactions</h2>
+                    <div className="filters-row" style={{marginBottom: '0.75rem'}}>
+                        <input
+                            type="text"
+                            placeholder="Search drug or gene..."
+                            onChange={e => setDrugSearch(e.target.value)}
+                        />
+                        <div style={{fontSize:'0.75rem', color:'var(--text-dim)'}}>
+                            {filteredDrugs.length} of {drugs.length} interactions
+                        </div>
+                    </div>
+                    <div className="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Gene</th>
+                                    <th>Drug</th>
+                                    <th>Effect</th>
+                                    <th>Evidence</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredDrugs.map((d, i) => {
+                                    const parts = d.notes ? d.notes.split(' | ') : []
+                                    return (
+                                        <tr key={i}>
+                                            <td>{d.gene_name}</td>
+                                            <td>{parts[1]?.replace('Drug: ', '') || '—'}</td>
+                                            <td>{parts[0] || '—'}</td>
+                                            <td>{parts[2]?.replace('Evidence: ', '') || '—'}</td>
+                                            <td style={{color: getRiskColor(d.risk_score), fontWeight: 600}}>{d.risk_score}</td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+                    </div>
     )
 }

@@ -12,7 +12,6 @@ data/raw/*.gz
 data/processed/*
 
 # Database credentials
-database/credentials.py
 *.sql.bak
 
 # VS Code

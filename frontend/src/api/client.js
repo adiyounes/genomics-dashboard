@@ -61,3 +61,8 @@ export async function getResearch(gene, condition) {
     })
     return response.json()
 }
+
+export async function getConditions(variantId) {
+    const response = await fetch(`${BASE_URL}/conditions/${variantId}`)
+    return response.json()
+}

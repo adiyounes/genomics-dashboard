@@ -528,3 +528,78 @@ tr:hover td {
 .research-paper a:hover {
     text-decoration: underline;
 }
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    width: 500px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.modal-body {
+    padding: 1.25rem 1.5rem;
+}
+
+.condition-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    transition: border-color 0.15s;
+}
+
+.condition-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--accent-bg);
+}

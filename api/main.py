@@ -196,3 +196,20 @@ async def get_research(request: ResearchRequest):
             return {"error": "Agent unavailable"}
     except Exception as e:
         return {"error": str(e)}
+    
+@app.get("/conditions/{variant_id}")
+def get_conditions(variant_id: int):
+    return execute_query("""
+        SELECT DISTINCT
+            SPLIT_PART(notes, ' | ', 2) as condition_name,
+            annotation_type,
+            risk_score
+        FROM variant_annotations
+        WHERE variant_id = %s
+        AND source = 'clinvar'
+        AND notes IS NOT NULL
+        AND SPLIT_PART(notes, ' | ', 2) != 'not provided'
+        AND SPLIT_PART(notes, ' | ', 2) != ''
+        ORDER BY risk_score DESC
+        LIMIT 10
+    """, (variant_id,))

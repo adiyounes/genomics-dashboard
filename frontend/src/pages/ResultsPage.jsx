@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getUploads, getVariants, getRiskSummary, getDrugs, getResearch} from '../api/client'
+import { getUploads, getVariants, getRiskSummary, getDrugs, getResearch, getConditions} from '../api/client'
 
 function getRiskColor(score) {
     if (!score) return 'var(--text-dim)'
@@ -33,6 +33,9 @@ export default function ResultsPage() {
     const [research, setResearch] = useState(null)
     const [researchLoading, setResearchLoading] = useState(false)
     const [researchGene, setResearchGene] = useState(null)
+    const [showModal, setShowModal] = useState(false)
+    const [modalVariant, setModalVariant] = useState(null)
+    const [conditions, setConditions] = useState([])
 
     useEffect(()=>{
         getUploads().then(data => setUploads(data))
@@ -59,7 +62,13 @@ export default function ResultsPage() {
         }
     }
 
-
+    async function openResearchModal(variant) {
+        setModalVariant(variant)
+        setShowModal(true)
+        setConditions([])
+        const data = await getConditions(variant.variant_id)
+        setConditions(data)
+    }
 
     const filtered = variants.filter(v => {
         if (geneSearch && !v.gene_name?.toLowerCase().includes(geneSearch.toLowerCase())) return false
@@ -173,9 +182,9 @@ export default function ResultsPage() {
                                             {v.risk_score || '—'}
                                         </td>
                                         <td>
-                                            {v.gene_name && v.flag && (
+                                            {v.gene_name && v.flag === 'clinical' && (
                                                 <button className='btn-research'
-                                                    onClick={() => handleResearch(v.gene_name, v.flag === 'clinical' ? 'disease' : 'drug metabolism')}
+                                                    onClick={() => openResearchModal(v)}
                                                 >
                                                     Research
                                                 </button>
@@ -227,7 +236,7 @@ export default function ResultsPage() {
                 </>
             )}
 
-            {drugs.length > 0 && (
+        {drugs.length > 0 && (
                 <>
                     <h2 className="section-title">Drug Interactions</h2>
                     <div className="filters-row" style={{marginBottom: '0.75rem'}}>
@@ -269,6 +278,39 @@ export default function ResultsPage() {
                     </div>
                 </>
             )}
+        {showModal && modalVariant && (
+            <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
+                        <span>🔬 Research {modalVariant.gene_name}</span>
+                        <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
                     </div>
+                    <div className="modal-body">
+                        <p style={{color: 'var(--text-dim)', fontSize: '0.8rem', marginBottom: '1rem'}}>
+                            Select a condition to research with the literature agent:
+                        </p>
+                        {conditions.length === 0 && (
+                            <div className="loading">Loading conditions...</div>
+                        )}
+                        {conditions.map((c, i) => (
+                            <button
+                                key={i}
+                                className="condition-btn"
+                                onClick={() => {
+                                    setShowModal(false)
+                                    handleResearch(modalVariant.gene_name, c.condition_name)
+                                }}
+                            >
+                                <span>{c.condition_name}</span>
+                                <span style={{color: getRiskColor(c.risk_score), fontSize: '0.7rem'}}>
+                                    {c.annotation_type}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
+        </div>
     )
 }

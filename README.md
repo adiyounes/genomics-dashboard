@@ -1,5 +1,9 @@
 # genomics-dashboard (work still going on)
+
+
 [![CI](https://github.com/adiyounes/genomics-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/adiyounes/genomics-dashboard/actions/workflows/ci.yml)
+
+
 A unified genomic analysis pipeline   |   pharmacogenomics, pathogenicity prediction
 
 ## Modules

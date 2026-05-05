@@ -1,14 +1,9 @@
--- GenomeDx — PostgreSQL Schema
--- Database: genomics_db | User: genomics_user
--- 9 tables — create in this order to respect foreign keys:
--- users → vcf_uploads → variants → variant_annotations → risk_summary
--- clinvar_annotations, pharmgkb_annotations, gene_coordinates,
--- exon_coordinates are independent — load in any order
+-- GenomeDx database schema
+-- 9 tables, create in order: users, vcf_uploads, variants, variant_annotations, risk_summary
+-- clinvar_annotations, pharmgkb_annotations, gene_coordinates, exon_coordinates can be loaded in any order
 
 
--- ── 1. USERS ─────────────────────────────────────────────────
--- People who upload VCF files to the system
-
+-- 1. Who uploads files to the system
 CREATE TABLE IF NOT EXISTS users (
     user_id    SERIAL PRIMARY KEY,
     username   VARCHAR(100) NOT NULL UNIQUE,
@@ -17,11 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 
--- ── 2. VCF UPLOADS ───────────────────────────────────────────
--- One row per sample in an uploaded VCF file
+-- 2. One row per sample in an uploaded VCF file
 -- status: pending | processing | complete | failed
--- notes : stores assembly e.g. "assembly=GRCh38;sample=PATIENT_001"
-
 CREATE TABLE IF NOT EXISTS vcf_uploads (
     upload_id       SERIAL PRIMARY KEY,
     user_id         INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -33,12 +25,9 @@ CREATE TABLE IF NOT EXISTS vcf_uploads (
 );
 
 
--- ── 3. VARIANTS ──────────────────────────────────────────────
--- Every genetic variant found in a VCF file
+-- 3. Every genetic variant found in a VCF file
 -- flag: clinical | pharmacogenomics | both | NULL
--- zygosity: heterozygous (one copy) | homozygous_alt (two copies)
--- risk_score: filled by the annotator (0.0 to 1.0)
-
+-- zygosity: heterozygous | homozygous_alt
 CREATE TABLE IF NOT EXISTS variants (
     variant_id    SERIAL PRIMARY KEY,
     upload_id     INT NOT NULL REFERENCES vcf_uploads(upload_id) ON DELETE CASCADE,
@@ -61,12 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_variants_upload   ON variants(upload_id);
 CREATE INDEX IF NOT EXISTS idx_variants_position ON variants(chromosome, position);
 
 
--- ── 4. CLINVAR ANNOTATIONS ───────────────────────────────────
--- 2.6M known disease variants from NIH ClinVar
--- clinical_significance: Pathogenic | Likely pathogenic |
---   Uncertain significance | Likely benign | Benign
--- review_status: confidence level of the submission
-
+-- 4. 2.6M known disease variants loaded from NIH ClinVar
 CREATE TABLE IF NOT EXISTS clinvar_annotations (
     clinvar_id            SERIAL PRIMARY KEY,
     chromosome            VARCHAR(10),
@@ -85,10 +69,8 @@ CREATE INDEX IF NOT EXISTS idx_clinvar_gene         ON clinvar_annotations(gene_
 CREATE INDEX IF NOT EXISTS idx_clinvar_significance ON clinvar_annotations(clinical_significance);
 
 
--- ── 5. PHARMGKB ANNOTATIONS ──────────────────────────────────
--- 5,120 gene-drug relationships from Stanford PharmGKB
--- evidence_level: 1A (strongest) → 4 (weakest)
-
+-- 5. 5,120 gene-drug relationships loaded from Stanford PharmGKB
+-- evidence_level: 1A (strongest) to 4 (weakest)
 CREATE TABLE IF NOT EXISTS pharmgkb_annotations (
     pharmgkb_id        SERIAL PRIMARY KEY,
     gene_name          TEXT,
@@ -103,12 +85,8 @@ CREATE INDEX IF NOT EXISTS idx_pharmgkb_gene ON pharmgkb_annotations(gene_name);
 CREATE INDEX IF NOT EXISTS idx_pharmgkb_drug ON pharmgkb_annotations(drug_name);
 
 
--- ── 6. VARIANT ANNOTATIONS ───────────────────────────────────
--- Results of matching a patient's variants against ClinVar/PharmGKB
--- One variant can have many annotations (multiple submitters, multiple drugs)
--- source: clinvar | pharmgkb
--- source_id: soft reference to clinvar_id or pharmgkb_id
-
+-- 6. Results of matching a patient's variants against ClinVar and PharmGKB
+-- source_id is a soft reference to either clinvar_id or pharmgkb_id
 CREATE TABLE IF NOT EXISTS variant_annotations (
     annotation_id   SERIAL PRIMARY KEY,
     variant_id      INT NOT NULL REFERENCES variants(variant_id) ON DELETE CASCADE,
@@ -124,28 +102,19 @@ CREATE INDEX IF NOT EXISTS idx_variant_annotations_variant ON variant_annotation
 CREATE INDEX IF NOT EXISTS idx_variant_annotations_source  ON variant_annotations(source, annotation_type);
 
 
--- ── 7. RISK SUMMARY ──────────────────────────────────────────
--- One row per upload — final risk scores shown on the dashboard
--- overall_score = pathogenicity×0.5 + pharmacogenomics×0.3
---               + crispr×0.1 + microbiome×0.1
-
+-- 7. One risk summary per upload shown on the dashboard
+-- overall_score = pathogenicity x 0.6 + pharmacogenomics x 0.4
 CREATE TABLE IF NOT EXISTS risk_summary (
     summary_id             SERIAL PRIMARY KEY,
     upload_id              INT NOT NULL REFERENCES vcf_uploads(upload_id) ON DELETE CASCADE,
     pathogenicity_score    DOUBLE PRECISION,
     pharmacogenomics_score DOUBLE PRECISION,
-    crispr_safety_score    DOUBLE PRECISION,
-    microbiome_score       DOUBLE PRECISION,
     overall_score          DOUBLE PRECISION,
     generated_at           TIMESTAMP DEFAULT NOW()
 );
 
 
--- ── 8. GENE COORDINATES ──────────────────────────────────────
--- 40,502 human genes from Ensembl GRCh38 GTF
--- Used by the parser to resolve gene names from chromosome + position
--- biotype: protein_coding | lncRNA | pseudogene | miRNA | ...
-
+-- 8. 40,502 human genes from Ensembl GRCh38, used to resolve gene names from coordinates
 CREATE TABLE IF NOT EXISTS gene_coordinates (
     gene_coord_id SERIAL PRIMARY KEY,
     gene_name     TEXT NOT NULL,
@@ -161,11 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_gene_coord_lookup ON gene_coordinates(chromosome,
 CREATE INDEX IF NOT EXISTS idx_gene_coord_name   ON gene_coordinates(gene_name);
 
 
--- ── 9. EXON COORDINATES ──────────────────────────────────────
--- 1,552,149 exons from Ensembl GRCh38 GTF
--- Exons are the coding parts of genes — mutations here are more clinically significant
--- Used to distinguish exonic vs intronic variants
-
+-- 9. 1,552,149 exons from Ensembl GRCh38, used to distinguish exonic from intronic variants
 CREATE TABLE IF NOT EXISTS exon_coordinates (
     exon_coord_id SERIAL PRIMARY KEY,
     gene_coord_id INT REFERENCES gene_coordinates(gene_coord_id),
@@ -182,7 +147,6 @@ CREATE INDEX IF NOT EXISTS idx_exon_coord_lookup ON exon_coordinates(chromosome,
 CREATE INDEX IF NOT EXISTS idx_exon_gene_name    ON exon_coordinates(gene_name);
 
 
--- Sanity check — should return 9 table names
 SELECT table_name
 FROM information_schema.tables
 WHERE table_schema = 'public'

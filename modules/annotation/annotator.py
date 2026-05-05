@@ -300,13 +300,11 @@ def save_risk_summary(upload_id):
     # (worst case is most clinically relevant)
     path_score  = max(pathogenicity_scores)    if pathogenicity_scores    else 0.0
     pgx_score   = max(pharmacogenomics_scores) if pharmacogenomics_scores else 0.0
-    crispr_score = 0.0   # filled in by CRISPR module later
-    micro_score  = 0.0   # filled in by microbiome module later
 
     # Overall = weighted average of available scores
     # Pathogenicity weighted higher (more clinically urgent)
-    weights = [0.5, 0.3, 0.1, 0.1]
-    scores  = [path_score, pgx_score, crispr_score, micro_score]
+    weights = [0.6, 0.4]
+    scores  = [path_score, pgx_score]
     overall = round(sum(w * s for w, s in zip(weights, scores)), 3)
 
     # Delete existing summary for this upload if re-running
@@ -321,25 +319,19 @@ def save_risk_summary(upload_id):
             upload_id,
             pathogenicity_score,
             pharmacogenomics_score,
-            crispr_safety_score,
-            microbiome_score,
             overall_score
-        ) VALUES (%s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s)
         RETURNING summary_id
     """, params=(
         upload_id,
         round(path_score, 3),
         round(pgx_score, 3),
-        crispr_score,
-        micro_score,
         overall,
     ))
 
     return {
         "pathogenicity"    : round(path_score, 3),
         "pharmacogenomics" : round(pgx_score, 3),
-        "crispr"           : crispr_score,
-        "microbiome"       : micro_score,
         "overall"          : overall,
     }
 
@@ -348,7 +340,7 @@ def annotate_upload(upload_id):
     print(f"  ANNOTATING upload_id = {upload_id}")
     print(f"{'='*60}")
 
-    # ── Load variants ──
+    # Load variants
     variants = execute_query("""
         SELECT
             variant_id, chromosome, position,
@@ -365,7 +357,7 @@ def annotate_upload(upload_id):
 
     print(f"\n  Found {len(variants)} variants to annotate\n")
 
-    # ── Annotate each variant ──
+    # Annotate each variant
     stats = {
         "total"          : len(variants),
         "clinvar_hits"   : 0,
@@ -384,7 +376,7 @@ def annotate_upload(upload_id):
 
         all_annotations = []
 
-        # ── ClinVar matching ──
+        # ClinVar matching
         if flag in ('clinical', 'both', None):
             clinvar_hits = match_clinvar(variant)
             if clinvar_hits:
@@ -395,7 +387,7 @@ def annotate_upload(upload_id):
                       f"(score={best['risk_score']}, "
                       f"match={best['match_type']})")
 
-        # ── PharmGKB matching ──
+        # PharmGKB matching 
         if flag in ('pharmacogenomics', 'both'):
             pgx_hits = match_pharmgkb(variant)
             if pgx_hits:
@@ -405,7 +397,7 @@ def annotate_upload(upload_id):
                 for hit in pgx_hits[:3]:   # show top 3
                     print(f"       → {hit['notes'][:80]}")
 
-        # ── Also run ClinVar on pharmacogenomics variants ──
+        # Also run ClinVar on pharmacogenomics variants
         # CYP genes can also appear in ClinVar
         if flag == 'pharmacogenomics':
             clinvar_hits = match_clinvar(variant)
@@ -413,7 +405,7 @@ def annotate_upload(upload_id):
                 all_annotations.extend(clinvar_hits)
                 stats['clinvar_hits'] += 1
 
-        # ── Save annotations ──
+        # Save annotations
         if all_annotations:
             max_score = save_annotations(variant_id, all_annotations)
             update_variant_risk_score(variant_id, max_score)
@@ -422,14 +414,12 @@ def annotate_upload(upload_id):
             stats['no_match'] += 1
             print(f"    ○ No match found")
 
-    # ── Calculate risk summary ──
+    #Calculate risk summary
     print(f"\n  Calculating risk summary...")
     summary = save_risk_summary(upload_id)
 
-    # ── Print results ──
-    print(f"\n{'='*60}")
+    # Print results
     print(f"  ANNOTATION COMPLETE")
-    print(f"{'='*60}")
     print(f"\n  Variants processed  : {stats['total']}")
     print(f"  ClinVar matches     : {stats['clinvar_hits']}")
     print(f"  PharmGKB matches    : {stats['pharmgkb_hits']}")
@@ -437,12 +427,9 @@ def annotate_upload(upload_id):
     print(f"  Total annotations   : {stats['annotations']}")
 
     if summary:
-        print(f"\n  ── Risk Summary ──")
+        print(f"\n  Risk Summary ")
         print(f"  Pathogenicity score    : {summary['pathogenicity']}")
         print(f"  Pharmacogenomics score : {summary['pharmacogenomics']}")
-        print(f"  CRISPR safety score    : {summary['crispr']} (pending)")
-        print(f"  Microbiome score       : {summary['microbiome']} (pending)")
-        print(f"  ─────────────────────────────")
         print(f"  Overall risk score     : {summary['overall']}")
 
     return {**stats, "summary": summary}

@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from database.connect import execute_query, execute_insert, get_connection
 
 
-# ── Base risk scores by clinical significance ─────────────────
+# Base risk scores by clinical significance
 SIGNIFICANCE_SCORES = {
     "pathogenic"                        : 1.0,
     "pathogenic/likely pathogenic"      : 0.9,
@@ -17,14 +17,14 @@ SIGNIFICANCE_SCORES = {
     "benign"                            : 0.0,
 }
 
-# ── Zygosity multipliers ──────────────────────────────────────
+# Zygosity multipliers
 ZYGOSITY_MULTIPLIERS = {
-    "homozygous_alt" : 1.0,   # both copies affected — full risk
-    "heterozygous"   : 0.7,   # one working copy — reduced risk
+    "homozygous_alt" : 1.0,   # both copies affected, full risk
+    "heterozygous"   : 0.7,   # one working copy, reduced risk
     "unknown"        : 0.5,   # uncertain
 }
 
-# ── PharmGKB evidence level scores ───────────────────────────
+# PharmGKB evidence level scores 
 EVIDENCE_SCORES = {
     "1A": 0.9,
     "1B": 0.75,

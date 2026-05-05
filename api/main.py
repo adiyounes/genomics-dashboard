@@ -200,16 +200,27 @@ async def get_research(request: ResearchRequest):
 @app.get("/conditions/{variant_id}")
 def get_conditions(variant_id: int):
     return execute_query("""
-        SELECT DISTINCT
-            SPLIT_PART(notes, ' | ', 2) as condition_name,
+        SELECT 
+            condition_name,
             annotation_type,
             risk_score
-        FROM variant_annotations
-        WHERE variant_id = %s
-        AND source = 'clinvar'
-        AND notes IS NOT NULL
-        AND SPLIT_PART(notes, ' | ', 2) != 'not provided'
-        AND SPLIT_PART(notes, ' | ', 2) != ''
+        FROM (
+            SELECT
+                SPLIT_PART(notes, ' | ', 2) as condition_name,
+                annotation_type,
+                risk_score,
+                ROW_NUMBER() OVER (
+                    PARTITION BY SPLIT_PART(notes, ' | ', 2) 
+                    ORDER BY risk_score DESC
+                ) as rn
+            FROM variant_annotations
+            WHERE variant_id = %s
+            AND source = 'clinvar'
+            AND notes IS NOT NULL
+            AND SPLIT_PART(notes, ' | ', 2) != 'not provided'
+            AND SPLIT_PART(notes, ' | ', 2) != ''
+        ) sub
+        WHERE rn = 1
         ORDER BY risk_score DESC
-        LIMIT 10
+        LIMIT 5
     """, (variant_id,))

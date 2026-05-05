@@ -301,8 +301,8 @@ export default function ResultsPage() {
                                     handleResearch(modalVariant.gene_name, c.condition_name)
                                 }}
                             >
-                                <span>{c.condition_name}</span>
-                                <span style={{color: getRiskColor(c.risk_score), fontSize: '0.7rem'}}>
+                                <span style={{flex: 1}}>{c.condition_name}</span>
+                                <span style={{color: getRiskColor(c.risk_score), fontSize: '0.7rem', whiteSpace: 'nowrap'}}>
                                     {c.annotation_type}
                                 </span>
                             </button>

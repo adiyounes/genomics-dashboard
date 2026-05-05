@@ -582,6 +582,7 @@ tr:hover td {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1rem;
     width: 100%;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);

@@ -8,7 +8,7 @@ import re
 from database.connect import get_connection, execute_insert, execute_query
 
 
-# ── CYP genes — flagged as pharmacogenomics ──────────────────
+# CYP genes flagged as pharmacogenomics
 CYP_GENES = {
     "CYP1A2", "CYP2B6", "CYP2C8", "CYP2C9", "CYP2C19",
     "CYP2D6", "CYP2E1", "CYP3A4", "CYP3A5", "CYP3A7",
@@ -16,7 +16,7 @@ CYP_GENES = {
     "G6PD", "IFNL3", "HLA-A", "HLA-B"
 }
 
-# ── Disease genes — flagged as clinical ──────────────────────
+# Disease genes  flagged as clinical 
 DISEASE_GENES = {
     "BRCA1", "BRCA2", "TP53", "PTEN", "APC",
     "MLH1", "MSH2", "MSH6", "CFTR", "HEXA",
@@ -24,7 +24,7 @@ DISEASE_GENES = {
     "NF1", "NF2",
 }
 
-# ── Known GRCh38 assembly strings found in VCF headers ───────
+# Known GRCh38 assembly strings found in VCF headers
 GRCH38_IDENTIFIERS = {
     "grch38","GRCh38", "hg38", "gca_000001405.15",
     "genome reference consortium human build 38"
@@ -399,12 +399,3 @@ def ingest_vcf(filepath, username=None, email=None):
         'upload_ids' : upload_ids,
         'inserted'   : inserted,
     }
-
-if __name__ == "__main__":
-    from pathlib import Path
-    result = ingest_vcf(
-        filepath = Path("data/raw/sample.vcf"),
-        username = "test_user",
-        email    = "test@genomics.com"
-    )
-    print(result)

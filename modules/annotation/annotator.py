@@ -263,7 +263,6 @@ def save_annotations(variant_id, annotations):
     return max_score
 
 def update_variant_risk_score(variant_id, risk_score):
-    """Update the risk_score column on the variant itself."""
     execute_insert("""
         UPDATE variants
         SET risk_score = %s

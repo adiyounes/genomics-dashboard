@@ -22,7 +22,7 @@ def parse_attributes(attr_string):
 
 def normalize_chrom(chrom):
     chrom = str(chrom).strip()
-    # GTF uses '1', '2', 'X', 'MT' — we need 'chr1', 'chr2', 'chrX', 'chrM'
+    # GTF uses '1', '2', 'X', 'MT' we need 'chr1', 'chr2', 'chrX', 'chrM'
     if chrom == "MT":
         return "chrM"
     if not chrom.startswith("chr"):
@@ -40,7 +40,7 @@ def create_schema(conn):
     cursor.execute(CREATE_TABLES_SQL)
     conn.commit()
     cursor.close()
-    print("  ✅ Schema created (gene_coordinates + exon_coordinates)")
+    print("Schema created (gene_coordinates + exon_coordinates)")
 
 
 def check_already_loaded(conn):

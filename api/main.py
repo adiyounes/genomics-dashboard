@@ -13,11 +13,11 @@ from modules.annotation.annotator import annotate_upload
 
 app = FastAPI(title="GenomeDX API")
 
-AGENT_URL = "http://localhost:8001"
+AGENT_URL = "http://34.243.52.170:8000"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://34.243.52.170:8000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

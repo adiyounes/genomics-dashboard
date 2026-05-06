@@ -135,7 +135,6 @@ export default function ResultsPage() {
                             <option value="all">All flags</option>
                             <option value="clinical">Clinical</option>
                             <option value="pharmacogenomics">Pharmacogenomics</option>
-                            <option value="both">Both</option>
                         </select>
                         <input type="number" placeholder="Min score" min="0" max="1" step="0.1" onChange={e => setMinScore(parseFloat(e.target.value) || 0)}/>
                         <label style={{display:'flex', alignItems:'center', gap:'0.5rem', color:'var(--text-muted)', fontSize:'0.8rem'}}>

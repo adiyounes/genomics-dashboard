@@ -45,17 +45,17 @@ A researcher uploads a VCF file containing a patient's genetic mutations. The pi
  
 The pipeline uses three public datasets that need to be downloaded before running:
  
-**ClinVar** — 2.6M known disease variants from NIH
+**ClinVar**  2.6M known disease variants from NIH
 ```bash
 wget https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz -P data/raw/
 ```
  
-**Ensembl GTF** — gene and exon coordinates for GRCh38
+**Ensembl GTF**  gene and exon coordinates for GRCh38
 ```bash
 wget https://ftp.ensembl.org/pub/release-109/gtf/homo_sapiens/Homo_sapiens.GRCh38.109.gtf.gz -P data/raw/
 ```
  
-**PharmGKB** — gene-drug relationships from Stanford
+**PharmGKB**  gene-drug relationships from Stanford
 ```bash
 wget https://api.pharmgkb.org/v1/download/file/data/relationships.zip -P data/raw/
 ```
@@ -116,16 +116,16 @@ pytest tests/ -v
  
 ## Limitations
  
-- Only accepts GRCh38 VCF files — older builds like GRCh37 are rejected
-- Flags variants in 35 clinically established genes — rare disease genes are not covered
+- Only accepts GRCh38 VCF files, older builds like GRCh37 are rejected
+- Flags variants in 35 clinically established genes rare disease genes are not covered
 - PharmGKB matching is gene-level only, not variant-level
-- Full genome ingestion is slow for large files — recommended to extract regions of interest first
+- Full genome ingestion is slow for large files recommended to extract regions of interest first
 ---
  
 ## What's next
  
-- **CRISPR Safety Prediction Agent** — predicts off-target cut sites for gene therapy planning
-- **Microbiome Drug Metabolism Agent** — cross-references gut microbiome composition with pharmacogenomics to refine drug metabolism predictions
+- **CRISPR Safety Prediction Agent** predicts off-target cut sites for gene therapy planning
+- **Microbiome Drug Metabolism Agent** cross-references gut microbiome composition with pharmacogenomics to refine drug metabolism predictions
 ---
  
 ## License

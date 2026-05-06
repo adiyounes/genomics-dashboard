@@ -1,0 +1,8 @@
+venv/
+.git/
+__pycache__/
+*.pyc
+data/raw/*.gz
+data/raw/*.txt
+frontend/node_modules/
+tests/

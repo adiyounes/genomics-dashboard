@@ -10,3 +10,6 @@ wget https://ftp.ensembl.org/pub/release-109/gtf/homo_sapiens/Homo_sapiens.GRCh3
 
 NA12878 benchmark:
 wget https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/NA12878_HG001/latest/GRCh38/HG001_GRCh38_1_22_v4.2.1_benchmark.vcf.gz
+
+PharmGKB :
+wget https://api.pharmgkb.org/v1/download/file/data/relationships.zip

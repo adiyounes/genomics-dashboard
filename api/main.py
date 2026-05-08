@@ -224,3 +224,13 @@ def get_conditions(variant_id: int):
         ORDER BY risk_score DESC
         LIMIT 5
     """, (variant_id,))
+
+@app.get("/debug-db")
+def debug_db():
+    import os
+    return {
+        "host": os.getenv("DB_HOST"),
+        "db": os.getenv("DB_NAME"),
+        "user": os.getenv("DB_USER"),
+        "port": os.getenv("DB_PORT")
+    }

@@ -64,22 +64,6 @@ def load_gene_index() -> dict:
 
     print("  Loading gene index into memory...")
     index = {}
-
-    # Load exons first
-    exons = execute_query(
-        """
-            SELECT chromosome, start_pos, end_pos, gene_name 
-            FROM exon_coordinates
-            ORDER BY chromosome, start_pos;
-        """
-    )
-
-    for row in exons:
-        chrom = row['chromosome']
-        if chrom not in index:
-            index[chrom] = []
-        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name'], 'exonic'))
-        # a tuple because fixed, protected data,less memory,Faster than lists
     
     genes = execute_query(
         """
@@ -93,7 +77,7 @@ def load_gene_index() -> dict:
         chrom = row['chromosome']
         if chrom not in index:
             index[chrom] = []
-        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name'], 'unknown'))
+        index[chrom].append((row['start_pos'], row['end_pos'], row['gene_name']))
 
     total = sum(len(v) for v in index.values())
     print(f" Gene index ready {total:,} entries")
@@ -102,9 +86,9 @@ def load_gene_index() -> dict:
     # Load genes as fallback
 
 def lookup_gene_memory(index: dict, chrom: str, pos: int):
-    for start, end, gene_name, region in index.get(chrom, []):
+    for start, end, gene_name in index.get(chrom, []):
         if start <= pos <= end:
-            return gene_name, region
+            return gene_name, "unknown"
     return None, None
 
 def parse_vcf_header(filepath):

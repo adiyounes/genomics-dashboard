@@ -6,5 +6,5 @@ DB_CONFIG = {
     "user"     : os.getenv("DB_USER", "genomics_user"),
     "password" : os.getenv("DB_PASSWORD", "genomics123"),
     "port"     : os.getenv("DB_PORT", "5432"),
-    "sslmode"  : "require"
+    "sslmode": os.getenv("DB_SSLMODE", "disable")
 }

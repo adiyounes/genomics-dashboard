@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import httpx
 from pydantic import BaseModel
+import os
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -13,7 +14,7 @@ from modules.annotation.annotator import annotate_upload
 
 app = FastAPI(title="GenomeDX API")
 
-AGENT_URL = "http://34.243.52.170:8000"
+AGENT_URL = os.getenv("AGENT_URL")
 
 app.add_middleware(
     CORSMiddleware,

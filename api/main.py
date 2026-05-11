@@ -20,7 +20,9 @@ app.add_middleware(
     allow_origins=["http://localhost:3000", 
                    "http://34.243.52.170:8000", 
                    "https://genomics-dashboard-ggin.vercel.app",
-                   "genomics-dashboard-ggin-5h64x79xg-adiyounes-projects.vercel.app"],
+                   "genomics-dashboard-ggin-5h64x79xg-adiyounes-projects.vercel.app",
+                   "https://genomics-dashboard-green.vercel.app"
+                   ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

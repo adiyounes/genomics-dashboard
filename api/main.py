@@ -17,7 +17,11 @@ AGENT_URL = "http://34.243.52.170:8000"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://34.243.52.170:8000","https://genomics-dashboard-ggin.vercel.app"],
+    allow_origins=["http://localhost:3000", 
+                   "http://34.243.52.170:8000", 
+                   "https://genomics-dashboard-ggin.vercel.app",
+                   "genomics-dashboard-ggin-5h64x79xg-adiyounes-projects.vercel.app"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

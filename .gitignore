@@ -20,5 +20,3 @@ data/processed/*
 # OS
 .DS_Store
 database/backups/*.sql
-
-database/credentials.py

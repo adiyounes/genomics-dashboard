@@ -4,7 +4,7 @@ DB_CONFIG = {
     "host"     : os.getenv("DB_HOST", "localhost"),
     "database" : os.getenv("DB_NAME", "genomics_db"),
     "user"     : os.getenv("DB_USER", "genomics_user"),
-    "password" : os.getenv("DB_PASSWORD", "genomics123"),
+    "password" : os.getenv("DB_PASSWORD", "genomics_password"),
     "port"     : os.getenv("DB_PORT", "5432"),
-    "sslmode": os.getenv("DB_SSLMODE", "disable")
+    "sslmode"  : os.getenv("DB_SSLMODE", "disable")
 }

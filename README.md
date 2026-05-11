@@ -4,6 +4,15 @@
 [![CI](https://github.com/adiyounes/genomics-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/adiyounes/genomics-dashboard/actions/workflows/ci.yml)
 
 
+---
+
+ 
+**Live demo:** [genomics-dashboard-green.vercel.app](https://genomics-dashboard-green.vercel.app)
+
+**Literature agent:** Deployed on [Hugging Face Spaces](https://adiyounes-genomic-literature-agent.hf.space)
+
+---
+
 A genomics analysis platform that helps identify disease risks and drug interactions associated with a patient's genetic data. Researchers and clinicians upload a VCF file and the system returns a risk assessment across pathogenicity and pharmacogenomics domains, backed by 2.6M ClinVar variants and 5,120 PharmGKB gene-drug relationships.
  
 ---
@@ -69,6 +78,7 @@ wget https://api.pharmgkb.org/v1/download/file/data/relationships.zip -P data/ra
 ```bash
 # 1. Clone the repo
 git clone git@github.com:adiyounes/genomics-dashboard.git
+git clone git@github.com:adiyounes/genomics-literature-agent.git
 cd genomics-dashboard
  
 # 2. Create virtual environment
@@ -91,10 +101,20 @@ python3 database/load_clinvar.py
 python3 database/load_pharmgkb.py
 python3 database/load_gtf.py
  
-# 7. Start the API
+# 7. Start the literature agent
+cd ../genomics-literature-agent
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY and ENTREZ_EMAIL to .env
+uvicorn main:app --port 8001 &
+cd ../genomics-dashboard
+
+# 8. Start the API
 uvicorn api.main:app --reload --port 8000
  
-# 8. Start the frontend
+# 9. Start the frontend
 cd frontend
 npm install
 npm start
@@ -120,6 +140,8 @@ pytest tests/ -v
 - Flags variants in 35 clinically established genes rare disease genes are not covered
 - PharmGKB matching is gene-level only, not variant-level
 - Full genome ingestion is slow for large files recommended to extract regions of interest first
+- Flags variants in 35 clinically established genes, rare disease genes are not covered
+- Full genome ingestion is slow for large files, recommended to extract regions of interest first
 ---
  
 ## What's next

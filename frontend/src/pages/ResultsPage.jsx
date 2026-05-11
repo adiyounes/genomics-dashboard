@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getUploads, getVariants, getRiskSummary, getDrugs, getResearch, getConditions} from '../api/client'
+import ReactMarkdown from 'react-markdown'
 
 function getRiskColor(score) {
     if (!score) return 'var(--text-dim)'
@@ -209,7 +210,7 @@ export default function ResultsPage() {
                                 </span>
                             </div>
                             <div className="research-summary">
-                                {research.summary}
+                                <ReactMarkdown>{research.summary}</ReactMarkdown>
                             </div>
                             {research.top_papers && (
                                 <div style={{marginTop: '1rem'}}>

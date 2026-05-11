@@ -506,13 +506,6 @@ tr:hover td {
     border-bottom: 1px solid var(--border);
 }
 
-.research-summary {
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-    line-height: 1.8;
-    white-space: pre-wrap;
-}
-
 .research-paper {
     font-size: 0.78rem;
     margin-bottom: 0.5rem;
@@ -603,4 +596,66 @@ tr:hover td {
     border-color: var(--accent);
     color: var(--text-primary);
     background: var(--accent-bg);
+}
+
+.research-summary h2 {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 1.2rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.research-summary p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 0.5rem;
+}
+
+.research-summary ul {
+    padding-left: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.research-summary li {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 0.2rem;
+}
+
+.research-summary strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.research-summary table {
+    width: 100%;
+    font-size: 0.78rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.research-summary th {
+    background: var(--bg-tertiary);
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.research-summary td {
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+}
+
+.research-summary hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
 }

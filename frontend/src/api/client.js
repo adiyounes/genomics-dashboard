@@ -1,4 +1,5 @@
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
+const CRISPR_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001'
 
 export async function getUploads() {
     const response = await fetch(`${BASE_URL}/uploads`)
@@ -64,5 +65,25 @@ export async function getResearch(gene, condition) {
 
 export async function getConditions(variantId) {
     const response = await fetch(`${BASE_URL}/conditions/${variantId}`)
+    return response.json()
+}
+
+
+export async function analyzeCrispr(gene, variant, variantId = null) {
+    const response = await fetch(`${CRISPR_URL}/api/v1/crispr/analyze`, {
+        method : 'POST',
+        headers : {'Content-Type' : 'application/json'},
+        body : JSON.stringify({gene, variant, variant_id : variantId})
+    })
+    return response.json()
+}
+
+export async function getSimulations() {
+    const response = await fetch(`${CRISPR_URL}/api/v1/crispr/simulations`)
+    return response.json()
+    }
+
+export async function getSimulation(simulationId) {
+    const response = await fetch(`${CRISPR_URL}/api/v1/crispr/simulations/${simulationId}`)
     return response.json()
 }

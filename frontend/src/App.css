@@ -659,3 +659,190 @@ tr:hover td {
     border-top: 1px solid var(--border);
     margin: 1rem 0;
 }
+
+.crispr-page {
+    padding: var(--space-6);
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: var(--font-sans);
+}
+
+.crispr-page h1 {
+    color: var(--text-primary);
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.crispr-page h2 {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: var(--space-4);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.crispr-form {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-6);
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-end;
+}
+
+.crispr-form input {
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.crispr-form input:focus {
+    border-color: var(--accent);
+}
+
+.crispr-form input::placeholder {
+    color: var(--text-dim);
+}
+
+.crispr-form button {
+    background: var(--accent);
+    color: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-5);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.crispr-form button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.crispr-error {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid var(--risk-high);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    color: var(--risk-high);
+    font-size: 0.85rem;
+    margin-bottom: var(--space-5);
+}
+
+.crispr-result {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-6);
+}
+
+.verdict-badge {
+    display: inline-block;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-left: var(--space-2);
+}
+
+.verdict-safe     { background: rgba(74,222,128,0.15); color: var(--risk-minimal); }
+.verdict-caution  { background: rgba(251,191,36,0.15);  color: var(--risk-moderate); }
+.verdict-unsafe   { background: rgba(248,113,113,0.15); color: var(--risk-high); }
+
+.crispr-result-row {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    font-size: 0.875rem;
+}
+
+.crispr-result-label {
+    color: var(--text-muted);
+    min-width: 120px;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding-top: 2px;
+}
+
+.crispr-result-value {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.crispr-reasoning {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    font-family: var(--font-sans);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
+}
+
+.simulations-list {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.simulation-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.simulation-row:last-child {
+    border-bottom: none;
+}
+
+.simulation-row:hover {
+    background: var(--bg-tertiary);
+    cursor: pointer;
+}
+
+.sim-gene {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    min-width: 80px;
+}
+
+.sim-variant {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    flex: 1;
+}
+
+.sim-date {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}

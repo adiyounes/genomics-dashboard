@@ -1,5 +1,5 @@
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
-const CRISPR_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001'
+const CRISPR_URL = process.env.REACT_APP_CRISPR_URL || 'https://adiyounes-crispr-agent.hf.space'
 
 export async function getUploads() {
     const response = await fetch(`${BASE_URL}/uploads`)

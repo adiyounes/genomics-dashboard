@@ -9,7 +9,7 @@
  
 **Live demo:** [genomics-dashboard-green.vercel.app](https://genomics-dashboard-green.vercel.app)
 
-**Literature agent:** Deployed on [Hugging Face Spaces](https://adiyounes-genomic-literature-agent.hf.space)
+**Literature agent:** Deployed on [Hugging Face Spaces](https://adiyounes-genomic-literature-agent.hf.space/docs)
 
 ---
 
